@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgenPulsa Server</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--fg:#e6e9ef;--mut:#8a93a6;--acc:#4f8cff;--ok:#3fb950;--bad:#f85149}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:960px;margin:0 auto;padding:20px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--card);border:1px solid #232836;border-radius:10px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{font-size:24px;font-weight:700}.lbl{color:var(--mut);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #232836}
+th{color:var(--mut);font-weight:600}
+input,select,button{background:#1d2230;border:1px solid #2c3348;color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit}
+button{cursor:pointer;background:var(--acc);border:0;color:#fff}
+button.ghost{background:transparent;border:1px solid #2c3348}
+button.bad{background:var(--bad)}
+.st{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.st.success{background:#123d20;color:var(--ok)}.st.failed,.st.cancelled{background:#3d1416;color:var(--bad)}
+.st.queued,.st.running,.st.pending_payment{background:#0e2a4d;color:#79b8ff}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#key{width:220px}.msg{color:var(--mut);font-size:13px;min-height:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>AgenPulsa Server</h1>
+<div class="row" style="margin-bottom:16px">
+  <input id="key" placeholder="API Key" oninput="localStorage.apkey=this.value">
+  <span class="lbl" id="wib"></span>
+  <span id="maint"></span>
+</div>
+
+<div class="card grid">
+  <div><div class="lbl">Login</div><div class="kpi" id="login">-</div></div>
+  <div><div class="lbl">Saldo</div><div class="kpi" id="saldo">-</div></div>
+</div>
+
+<h2>Laporan</h2>
+<div class="card grid">
+  <div><div class="lbl">Sukses (periode)</div><div class="kpi" id="rSukses">-</div></div>
+  <div><div class="lbl">Modal</div><div class="kpi" id="rModal">-</div></div>
+  <div><div class="lbl">Omzet</div><div class="kpi" id="rOmzet">-</div></div>
+  <div><div class="lbl">Profit</div><div class="kpi" id="rProfit">-</div></div>
+  <div class="row"><select id="days" onchange="loadReport()"><option value="1">Harian</option><option value="7">Mingguan</option><option value="30">Bulanan</option></select></div>
+</div>
+
+<h2>Order Terakhir</h2>
+<div class="card"><table id="orders"><thead><tr><th>#</th><th>Paket</th><th>Nomor</th><th>Modal</th><th>Jual</th><th>Status</th><th>Pesan</th></tr></thead><tbody></tbody></table></div>
+
+<h2>Katalog</h2>
+<div class="card"><table id="catalog"><thead><tr><th>#</th><th>Label</th><th>Tab</th><th>Voucher</th><th>Modal</th><th>Harga Jual</th><th></th></tr></thead><tbody></tbody></table>
+<p class="msg">Tambah via API admin (POST /api/v1/catalog) — UI form menyusul.</p></div>
+
+</div>
+<script>
+const key=()=>localStorage.apkey||'';
+const rp=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
+async function api(path,opt={}){
+  const r=await fetch(path,{...opt,headers:{'X-API-Key':key(),'Content-Type':'application/json'}});
+  if(!r.ok) throw new Error((await r.json()).error||r.status);
+  return r.json();
+}
+async function loadStatus(){
+  try{
+    const s=await api('/api/v1/status');
+    document.getElementById('login').textContent=s.login?'AKTIF':'HABIS';
+    document.getElementById('login').style.color=s.login?'var(--ok)':'var(--bad)';
+    document.getElementById('saldo').textContent=s.saldo;
+    document.getElementById('wib').textContent=s.wib;
+    document.getElementById('maint').innerHTML=s.maintenance?'<span class="st failed">MAINTENANCE</span>':'';
+  }catch(e){document.getElementById('login').textContent='key salah?'}
+}
+async function loadReport(){
+  try{
+    const d=document.getElementById('days').value;
+    const l=await api('/api/v1/report?days='+d);
+    document.getElementById('rSukses').textContent=l.sukses+' / gagal '+l.gagal;
+    document.getElementById('rModal').textContent=rp(l.modal);
+    document.getElementById('rOmzet').textContent=rp(l.omzet);
+    const p=document.getElementById('rProfit');p.textContent=rp(l.profit);
+    p.style.color=l.profit>=0?'var(--ok)':'var(--bad)';
+  }catch(e){}
+}
+async function loadOrders(){
+  try{
+    const os=await api('/api/v1/orders?limit=20');
+    const tb=document.querySelector('#orders tbody');tb.innerHTML='';
+    (os||[]).forEach(o=>{
+      tb.insertAdjacentHTML('beforeend',`<tr><td>${o.id}</td><td>${o.label}</td><td>${o.nomor}</td><td>${rp(o.modal)}</td><td>${rp(o.harga_jual)}</td><td><span class="st ${o.status}">${o.status}</span></td><td class="lbl">${o.pesan||''}</td></tr>`);
+    });
+  }catch(e){}
+}
+async function loadCatalog(){
+  try{
+    const its=await api('/api/v1/catalog?all=1');
+    const tb=document.querySelector('#catalog tbody');tb.innerHTML='';
+    (its||[]).forEach(it=>{
+      tb.insertAdjacentHTML('beforeend',`<tr><td>${it.id}</td><td>${it.label}</td><td>${it.tab}</td><td>${it.voucher||'-'}</td><td>${rp(it.harga_max)}</td><td>${rp(it.harga_jual)}</td><td>${it.aktif?'aktif':'off'}</td></tr>`);
+    });
+  }catch(e){}
+}
+if(!localStorage.apkey)localStorage.apkey='';
+document.getElementById('key').value=key();
+loadStatus();loadReport();loadOrders();loadCatalog();
+setInterval(()=>{loadStatus();loadOrders()},15000);
+</script>
+</body>
+</html>

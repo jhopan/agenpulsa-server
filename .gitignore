@@ -1,0 +1,6 @@
+data/
+profile/
+*.exe
+agenpulsa-server
+agenpulsa-server-arm64
+.venv/
