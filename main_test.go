@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -128,5 +129,79 @@ func TestAPISmoke(t *testing.T) {
 		strings.NewReader(`{"event":"payment.paid","ref":"r1","amount":100}`))
 	if r3.StatusCode != 403 {
 		t.Errorf("webhook sig salah harus 403, got %d", r3.StatusCode)
+	}
+}
+
+func TestLoginSmoke(t *testing.T) {
+	dir := t.TempDir()
+	store, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	eng, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Close()
+
+	a := api.New(store, eng, testWebFS())
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+
+	// salah -> 401
+	r, _ := http.Post(srv.URL+"/api/login", "application/json",
+		strings.NewReader(`{"username":"admin","password":"salah"}`))
+	if r.StatusCode != 401 {
+		t.Errorf("login salah harus 401, got %d", r.StatusCode)
+	}
+
+	// benar -> 200 + cookie session, /api/me admin=true
+	r2, err := http.Post(srv.URL+"/api/login", "application/json",
+		strings.NewReader(`{"username":"admin","password":"admin123"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2.StatusCode != 200 {
+		t.Fatalf("login benar harus 200, got %d", r2.StatusCode)
+	}
+	cookies := r2.Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("harus ada cookie session")
+	}
+	req, _ := http.NewRequest("GET", srv.URL+"/api/me", nil)
+	req.AddCookie(cookies[0])
+	r3, _ := http.DefaultClient.Do(req)
+	var me struct {
+		Admin bool `json:"admin"`
+	}
+	_ = json.NewDecoder(r3.Body).Decode(&me)
+	if !me.Admin {
+		t.Error("session cookie harus admin=true")
+	}
+
+	// session jadi akses admin: tambah katalog tanpa API key
+	req2, _ := http.NewRequest("POST", srv.URL+"/api/v1/catalog",
+		strings.NewReader(`{"label":"T","tab":"Paket Kuota","cari":"T","harga_max":100,"harga_jual":200,"aktif":true}`))
+	req2.AddCookie(cookies[0])
+	r4, _ := http.DefaultClient.Do(req2)
+	if r4.StatusCode != 200 {
+		t.Errorf("tambah katalog via session harus 200, got %d", r4.StatusCode)
+	}
+
+	// logout -> session mati
+	req3, _ := http.NewRequest("POST", srv.URL+"/api/logout", nil)
+	req3.AddCookie(cookies[0])
+	http.DefaultClient.Do(req3)
+	req4, _ := http.NewRequest("GET", srv.URL+"/api/me", nil)
+	req4.AddCookie(cookies[0])
+	r5, _ := http.DefaultClient.Do(req4)
+	var me2 struct {
+		Admin bool `json:"admin"`
+	}
+	_ = json.NewDecoder(r5.Body).Decode(&me2)
+	if me2.Admin {
+		t.Error("setelah logout harus admin=false")
 	}
 }

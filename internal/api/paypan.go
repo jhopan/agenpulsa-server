@@ -14,11 +14,12 @@ import (
 
 // Paypan webhook: event payment.paid -> order pending_payment masuk queue.
 // Secret disimpan di settings.key "paypan_secret". Signature header:
-//   X-Paypan-Signature: hex(hmac_sha256(body, secret))
+//
+//	X-Paypan-Signature: hex(hmac_sha256(body, secret))
 type paypanEvent struct {
 	Event     string `json:"event"` // "payment.paid" | "payment.expired"
 	InvoiceID string `json:"invoice_id"`
-	Ref       string `json:"ref"`    // ref order agenpulsa (= ref invoice paypan)
+	Ref       string `json:"ref"` // ref order agenpulsa (= ref invoice paypan)
 	Amount    int64  `json:"amount"`
 	PaidAt    string `json:"paid_at"`
 }

@@ -4,3 +4,8 @@ profile/
 agenpulsa-server
 agenpulsa-server-arm64
 .venv/
+__pycache__/
+*.pyc
+profile_debug/
+shot-*.png
+ui-*.png

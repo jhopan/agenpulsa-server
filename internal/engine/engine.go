@@ -8,8 +8,8 @@ package engine
 
 import (
 	"fmt"
-	"net/http"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/launcher/flags"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
@@ -53,12 +54,14 @@ func ParseHarga(s string) int64 {
 }
 
 type Engine struct {
-	store    *db.Store
-	browser  *rod.Browser
-	userData string
-	mu       sync.Mutex // queue: satu eksekusi browser pada satu waktu
-	wake     chan struct{}
-	closed   bool
+	store     *db.Store
+	browser   *rod.Browser
+	userData  string
+	mu        sync.Mutex // queue: satu eksekusi browser pada satu waktu
+	wake      chan struct{}
+	closed    bool
+	loginOpen bool          // sesi login (window/VNC) sedang berjalan
+	sess      *LoginSession // sesi login aktif, nil kalau tidak ada
 }
 
 func New(store *db.Store) (*Engine, error) {
@@ -71,6 +74,33 @@ func New(store *db.Store) (*Engine, error) {
 	return e, nil
 }
 
+// lowmemFlags flag chromium hemat RAM/CPU (server low-spec).
+// Pasangan [nama, nilai]; nilai kosong = flag boolean.
+var lowmemFlags = [][2]string{
+	{"disable-gpu", ""},                   // tanpa GPU render
+	{"disable-dev-shm-usage", ""},         // /dev/shm kecil di VPS
+	{"disable-extensions", ""},            // tanpa ekstensi
+	{"disable-sync", ""},                  // tanpa sync
+	{"disable-translate", ""},             // tanpa translate UI
+	{"disable-background-networking", ""}, // tanpa traffic background
+	{"disable-default-apps", ""},
+	{"disable-plugins", ""},
+	{"no-first-run", ""},
+	{"mute-audio", ""},
+	{"blink-settings", "imagesEnabled=false"}, // jangan load gambar (isipulsa cukup DOM teks)
+}
+
+func applyLowmem(l *launcher.Launcher) *launcher.Launcher {
+	for _, f := range lowmemFlags {
+		if f[1] == "" {
+			l = l.Set(flags.Flag(f[0]))
+		} else {
+			l = l.Set(flags.Flag(f[0]), f[1])
+		}
+	}
+	return l
+}
+
 // browser lazy: start sekali, dipakai ulang semua order.
 func (e *Engine) getBrowser() (*rod.Browser, error) {
 	e.mu.Lock()
@@ -78,20 +108,20 @@ func (e *Engine) getBrowser() (*rod.Browser, error) {
 	if e.browser != nil {
 		return e.browser, nil
 	}
-	url, err := launcher.New().
+	l := applyLowmem(launcher.New().
 		UserDataDir(e.userData).
 		Headless(true).
-		Set("no-sandbox").
-		Launch()
+		Set("no-sandbox"))
+	url, err := l.Launch()
 	if err != nil {
-		// Fallback: pakai chromium binary dari playwright cache (Armbian).
+		// Fallback: pakai chromium binary dari sistem/playwright cache.
 		if bin := findChromium(); bin != "" {
-			url, err = launcher.New().
+			l2 := applyLowmem(launcher.New().
 				Bin(bin).
 				UserDataDir(e.userData).
 				Headless(true).
-				Set("no-sandbox").
-				Launch()
+				Set("no-sandbox"))
+			url, err = l2.Launch()
 		}
 		if err != nil {
 			return nil, fmt.Errorf("launch chromium: %w", err)
@@ -122,6 +152,9 @@ func findChromium() string {
 	}
 	return ""
 }
+
+// ProfileDir path folder user-data-dir (cookie isipulsa).
+func (e *Engine) ProfileDir() string { return e.userData }
 
 func (e *Engine) Close() {
 	e.closed = true
@@ -158,6 +191,11 @@ func (e *Engine) Worker() {
 	for {
 		if e.closed {
 			return
+		}
+		// sesi login aktif -> browser/profile dipakai login, jangan rebutan.
+		if e.LoginOpen() {
+			time.Sleep(2 * time.Second)
+			continue
 		}
 		o, err := e.store.PopNextQueued()
 		if err != nil {
@@ -212,142 +250,24 @@ func (e *Engine) Callback(o *db.Order, status, pesan string) {
 	}()
 }
 
-// runOrder: alur order sebenarnya di browser. Return (pesan, modal, orderID_isipulsa, sukses).
+// runOrder: order via HTTP murni (isip_api.py) — tanpa Chromium/Turnstile.
+// Return (pesan, modal, orderID_isipulsa, sukses).
 func (e *Engine) runOrder(o *db.Order) (string, int64, string, bool) {
-	// Ambil katalog item bila ada (untuk voucher/cari/harga_max).
+	// Ambil katalog item bila ada (untuk voucher/cari/harga_max/produk).
 	item := &db.CatalogItem{Tab: "Paket Kuota", Cari: o.Label}
 	if o.CatalogID > 0 {
 		if it, err := e.store.GetCatalog(o.CatalogID); err == nil {
 			item = it
 		}
 	}
+	produk := strings.ToLower(item.Tab)
+	produk = strings.ReplaceAll(produk, "paket kuota", "paket_kuota")
+	produk = strings.ReplaceAll(produk, "paket internet", "paket_internet")
+	produk = strings.ReplaceAll(produk, " ", "_")
 
-	browser, err := e.getBrowser()
-	if err != nil {
-		return "ERROR: " + err.Error(), 0, "", false
-	}
-
-	page, err := browser.Page(proto.TargetCreateTarget{URL: baseURL})
-	if err != nil {
-		return "ERROR: " + err.Error(), 0, "", false
-	}
-	defer func() {
-		_ = page.Close()
-	}()
-
-	if err := page.WaitLoad(); err != nil {
-		return "ERROR: timeout buka isipulsa: " + err.Error(), 0, "", false
-	}
-
-	// Cek login: #header-signin bertuliskan Masuk = sesi habis.
-	signin, _ := page.Element("#header-signin")
-	if signin != nil {
-		if txt, _ := signin.Text(); strings.Contains(txt, "Masuk") {
-			return "GAGAL: sesi login habis. Login ulang via VNC / inject cookies.", 0, "", false
-		}
-	}
-
-	// Klik tab produk.
-	tab, err := page.ElementR(".form-tabs a", item.Tab)
-	if err != nil {
-		return fmt.Sprintf("GAGAL: tab %q tidak ada", item.Tab), 0, "", false
-	}
-	if err := tab.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return "ERROR klik tab: " + err.Error(), 0, "", false
-	}
-
-	// Isi nomor + blur agar daftar paket termuat.
-	nomorInput, err := page.Element(`input[name="nomor_hp"]`)
-	if err != nil {
-		return "ERROR: input nomor tidak ada", 0, "", false
-	}
-	if err := nomorInput.SelectAllText(); err == nil {
-		_ = nomorInput.Input(o.Nomor)
-	}
-	_ = nomorInput.Blur()
-
-	if _, err := page.Elements("#nominal .row button"); err != nil {
-		return "ERROR: daftar paket tidak muncul", 0, "", false
-	}
-
-	// Pilih paket: voucher dulu, fallback cari.
-	var target *rod.Element
-	if item.Voucher != "" {
-		sel := fmt.Sprintf(`#nominal .row button[data-voucher="%s"]`, item.Voucher)
-		if el, err := page.Element(sel); err == nil {
-			target = el
-		}
-	}
-	if target == nil && item.Cari != "" {
-		btns, _ := page.Elements("#nominal .row button")
-		for _, b := range btns {
-			t, _ := b.Text()
-			if strings.Contains(strings.ToLower(t), strings.ToLower(item.Cari)) {
-				target = b
-				break
-			}
-		}
-	}
-	if target == nil {
-		return fmt.Sprintf("GAGAL: paket tidak ditemukan (voucher=%s, cari=%s)", item.Voucher, item.Cari), 0, "", false
-	}
-	if err := target.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return "ERROR klik paket: " + err.Error(), 0, "", false
-	}
-
-	// Payment method: saldo.
-	pay, err := page.Element("#pilihpembayaran")
-	if err == nil {
-	_ = pay.Select([]string{"balance"}, true, rod.SelectorTypeCSSSector)
-	}
-
-	namaPaket, _ := target.Text()
-	namaPaket = strings.Join(strings.Fields(namaPaket), " ")
-	hargaEl, _ := page.Element("#harga h3")
-	hargaStr := ""
-	if hargaEl != nil {
-		hargaStr, _ = hargaEl.Text()
-	}
-	modal := ParseHarga(hargaStr)
-
-	// Guard harga naik.
-	if item.HargaMax > 0 && modal > item.HargaMax {
-		msg := fmt.Sprintf("ORDER DIBATALKAN: harga naik. Sekarang Rp %s, batas Rp %d. Perbarui katalog jika harga baru wajar.",
-			formatRp(modal), item.HargaMax)
-		return msg, modal, "", false
-	}
-
-	// Submit order via jQuery $.post (bukan form.submit — tombol submit men-shadow).
-	res, err := page.Eval(`() => new Promise((resolve) => {
-		var url = "https://isipulsa.web.id/" + jQuery('input[name="produk"]').val();
-		jQuery.post(url, jQuery("#order_form").serialize(), function (data) {
-			resolve(JSON.stringify(data));
-		}).fail(function (xhr) {
-			resolve(JSON.stringify({success: false, errors: ["HTTP " + xhr.status]}));
-		});
-	})`)
-	if err != nil {
-		return "ERROR submit AJAX: " + err.Error(), modal, "", false
-	}
-	raw := res.Value.String()
-
-	if strings.Contains(raw, `"success":true`) {
-		reID := regexp.MustCompile(`"id":\s*"?(\d+)"?`)
-		id := ""
-		if m := reID.FindStringSubmatch(raw); m != nil {
-			id = m[1]
-		}
-		msg := fmt.Sprintf("ORDER SUKSES. Paket: %s | Harga: %s | ID: %s | https://isipulsa.web.id/history/view/%s",
-			namaPaket, hargaStr, id, id)
-		return msg, modal, id, true
-	}
-	// Ambil pesan error dari isipulsa.
-	reErr := regexp.MustCompile(`"errors":\s*\[(.*?)\]`)
-	pesan := "tidak diketahui"
-	if m := reErr.FindStringSubmatch(raw); m != nil {
-		pesan = strings.Trim(m[1], `"`)
-	}
-	return fmt.Sprintf("ORDER GAGAL. Paket: %s | Harga: %s | Alasan: %s", namaPaket, hargaStr, pesan), modal, "", false
+	// item.Cari = nama asli paket di isipulsa (anti-drift + fallback kalau voucher hilang)
+	sukses, pesan, orderID, modal := e.IsipOrder(o.Nomor, produk, item.Voucher, item.Cari, item.HargaMax)
+	return pesan, modal, orderID, sukses
 }
 
 // SearchPackages cari paket di tab tertentu (untuk katalog admin). Port dari search_packages().
@@ -396,33 +316,53 @@ func (e *Engine) SearchPackages(tab, keyword, nomor string) ([]map[string]string
 	return out, nil
 }
 
-// CekStatus cek login & saldo isipulsa. Port dari cek_status(). Return (loginOK, saldoStr).
+// CekStatus cek login & saldo via HTTP murni (tanpa Chromium).
 func (e *Engine) CekStatus() (bool, string) {
-	browser, err := e.getBrowser()
+	ok, saldo, err := e.IsipCekStatus()
 	if err != nil {
 		return false, "Error"
 	}
-	page, err := browser.Page(proto.TargetCreateTarget{URL: baseURL})
+	return ok, saldo
+}
+
+// withBrowser buka chromium baru (profile sama), jalankan fn, tutup browser.
+// Chrome tidak pernah nyangkut pegang profile (pola launch_persistent_context
+// + close di bot.py lama).
+func (e *Engine) withBrowser(fn func(page *rod.Page) (bool, string, error)) (bool, string, error) {
+	l := applyLowmem(launcher.New().
+		UserDataDir(e.userData).
+		Headless(true).
+		Leakless(false).
+		Set("no-sandbox"))
+	url, err := l.Launch()
 	if err != nil {
-		return false, "Error"
+		if bin := findChromium(); bin != "" {
+			l2 := applyLowmem(launcher.New().
+				Bin(bin).
+				UserDataDir(e.userData).
+				Headless(true).
+				Leakless(false).
+				Set("no-sandbox"))
+			url, err = l2.Launch()
+		}
+		if err != nil {
+			return false, "", fmt.Errorf("launch chromium: %w", err)
+		}
+	}
+	b := rod.New().ControlURL(url)
+	if err := b.Connect(); err != nil {
+		return false, "", err
+	}
+	defer b.Close()
+	page, err := b.Page(proto.TargetCreateTarget{URL: baseURL})
+	if err != nil {
+		return false, "", err
 	}
 	defer func() { _ = page.Close() }()
 	if err := page.WaitLoad(); err != nil {
-		return false, "Error"
+		return false, "", err
 	}
-	header, err := page.Element("header")
-	if err != nil {
-		return false, "Error"
-	}
-	txt, _ := header.Text()
-	if strings.Contains(txt, "Masuk") && !strings.Contains(txt, "Saldo") {
-		return false, "-"
-	}
-	saldo := strings.TrimSpace(strings.ReplaceAll(txt, "Saldo Deposit", ""))
-	if saldo == "" {
-		saldo = "Rp 0"
-	}
-	return true, saldo
+	return fn(page)
 }
 
 func formatRp(n int64) string {

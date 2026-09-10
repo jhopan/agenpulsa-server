@@ -4,6 +4,10 @@ package db
 import (
 	"database/sql"
 	_ "embed"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite" // driver sqlite (dulu cuma di web_test.go — production lupa)
 )
 
 //go:embed schema.sql
@@ -14,6 +18,11 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
+	if dir := filepath.Dir(path); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
 	d, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err

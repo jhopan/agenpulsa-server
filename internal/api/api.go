@@ -32,7 +32,17 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Web admin (static).
+	// Web admin: dashboard (perlu admin) + login page (publik).
+	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		if !a.adminKey(r) && !a.sessionAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		a.serveFile(w, "index.html")
+	})
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		a.serveFile(w, "login.html")
+	})
 	mux.Handle("GET /", http.FileServerFS(a.web))
 
 	// API v1 (API key). needAdmin=true untuk operasi ubah katalog.
@@ -49,8 +59,34 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/report", a.auth(false, a.report))
 	mux.HandleFunc("GET /api/v1/maintenance", a.auth(false, a.maintenance))
 
+	// Akun isipulsa + pengaturan (admin via session/API key, gate di handler).
+	mux.HandleFunc("GET /api/v1/account", a.auth(false, a.account))
+	mux.HandleFunc("POST /api/v1/account/relogin", a.auth(true, a.gantiAkun))
+	mux.HandleFunc("POST /api/v1/account/login-manual", a.auth(true, a.loginManual))
+	mux.HandleFunc("POST /api/v1/account/cookies", a.auth(true, a.importCookies))
+	mux.HandleFunc("GET /api/v1/account/vnc", a.auth(true, a.loginVNC))
+	mux.HandleFunc("POST /api/v1/account/username", a.auth(true, a.simpanUsername))
+	mux.HandleFunc("GET /api/v1/settings", a.auth(true, a.getSettings))
+	mux.HandleFunc("POST /api/v1/settings", a.auth(true, a.setSettings))
+	mux.HandleFunc("GET /api/v1/keys", a.auth(true, a.listKeys))
+	mux.HandleFunc("POST /api/v1/keys", a.auth(true, a.tambahKey))
+	mux.HandleFunc("DELETE /api/v1/keys/{key}", a.auth(true, a.hapusKey))
+	mux.HandleFunc("GET /api/v1/search", a.auth(true, a.searchPaket))
+
+	// Pembelian manual + jadwal (admin web).
+	mux.HandleFunc("POST /api/v1/beli", a.auth(true, a.beliManual))
+	mux.HandleFunc("GET /api/v1/jadwal", a.auth(true, a.jadwalList))
+	mux.HandleFunc("POST /api/v1/jadwal", a.auth(true, a.jadwalAdd))
+	mux.HandleFunc("POST /api/v1/jadwal/{id}/toggle", a.auth(true, a.jadwalToggle))
+	mux.HandleFunc("DELETE /api/v1/jadwal/{id}", a.auth(true, a.jadwalDelete))
+
 	// Paypan webhook (HMAC, tanpa API key).
 	mux.HandleFunc("POST /api/webhooks/paypan", a.paypanWebhook)
+
+	// Login admin (username/password -> session cookie).
+	mux.HandleFunc("POST /api/login", a.login)
+	mux.HandleFunc("POST /api/logout", a.logout)
+	mux.HandleFunc("GET /api/me", a.me)
 
 	return mux
 }
@@ -58,7 +94,7 @@ func (a *API) Routes() http.Handler {
 // ---------- auth ----------
 
 type keyPerm struct {
-	key  *db.APIKey
+	key   *db.APIKey
 	admin bool
 }
 
@@ -77,7 +113,7 @@ func (a *API) adminKey(r *http.Request) bool {
 
 func (a *API) auth(needAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if a.adminKey(r) {
+		if a.adminKey(r) || a.sessionAdmin(r) {
 			next(w, r)
 			return
 		}
@@ -309,9 +345,9 @@ func (a *API) listOrders(w http.ResponseWriter, r *http.Request) {
 func (a *API) status(w http.ResponseWriter, r *http.Request) {
 	ok, saldo := a.eng.CekStatus()
 	writeJSON(w, 200, map[string]any{
-		"login": ok,
-		"saldo": saldo,
-		"wib":   db.NowWIB().Format("2006-01-02 15:04:05 WIB"),
+		"login":       ok,
+		"saldo":       saldo,
+		"wib":         db.NowWIB().Format("2006-01-02 15:04:05 WIB"),
 		"maintenance": engine.IsMaintenance(db.NowWIB()),
 	})
 }
@@ -336,6 +372,17 @@ func (a *API) maintenance(w http.ResponseWriter, r *http.Request) {
 		"maintenance": engine.IsMaintenance(db.NowWIB()),
 		"pesan":       engine.MaintenanceMessage(),
 	})
+}
+
+// serveFile baca dari embed FS (login.html / index.html).
+func (a *API) serveFile(w http.ResponseWriter, name string) {
+	b, err := fs.ReadFile(a.web, name)
+	if err != nil {
+		http.NotFound(w, nil)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(b)
 }
 
 func randomHex(n int) string {

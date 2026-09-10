@@ -97,21 +97,21 @@ func (s *Store) DeleteCatalog(id int64) error {
 // ---------- Orders ----------
 
 type Order struct {
-	ID            int64  `json:"id"`
-	Ref           string `json:"ref"`
-	Nomor         string `json:"nomor"`
-	CatalogID     int64  `json:"catalog_id"`
-	Label         string `json:"label"`
-	Modal         int64  `json:"modal"`
-	HargaJual     int64  `json:"harga_jual"`
-	Status        string `json:"status"`
-	OrderIDIsip   string `json:"order_id_isipulsa"`
-	Pesan         string `json:"pesan"`
-	Sumber        string `json:"sumber"`
-	ChatID        string `json:"chat_id"`
-	CallbackURL   string `json:"callback_url"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID          int64  `json:"id"`
+	Ref         string `json:"ref"`
+	Nomor       string `json:"nomor"`
+	CatalogID   int64  `json:"catalog_id"`
+	Label       string `json:"label"`
+	Modal       int64  `json:"modal"`
+	HargaJual   int64  `json:"harga_jual"`
+	Status      string `json:"status"`
+	OrderIDIsip string `json:"order_id_isipulsa"`
+	Pesan       string `json:"pesan"`
+	Sumber      string `json:"sumber"`
+	ChatID      string `json:"chat_id"`
+	CallbackURL string `json:"callback_url"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 const orderCols = "id,COALESCE(ref,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
@@ -188,7 +188,7 @@ func (s *Store) UpdateOrderStatus(id int64, status, pesan, orderIDIsip string) e
 
 // PopNextQueued ambil satu order terlama berstatus queued (FIFO).
 func (s *Store) PopNextQueued() (*Order, error) {
-	o, err := scanOrder(s.DB.QueryRow("SELECT "+orderCols+" FROM orders WHERE status='queued' ORDER BY id ASC LIMIT 1"))
+	o, err := scanOrder(s.DB.QueryRow("SELECT " + orderCols + " FROM orders WHERE status='queued' ORDER BY id ASC LIMIT 1"))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -198,12 +198,12 @@ func (s *Store) PopNextQueued() (*Order, error) {
 // ---------- Laporan ----------
 
 type Laporan struct {
-	Periode   string `json:"periode"`
-	Sukses    int    `json:"sukses"`
-	Gagal     int    `json:"gagal"`
-	Modal     int64  `json:"modal"`
-	Omzet     int64  `json:"omzet"`
-	Profit    int64  `json:"profit"`
+	Periode string `json:"periode"`
+	Sukses  int    `json:"sukses"`
+	Gagal   int    `json:"gagal"`
+	Modal   int64  `json:"modal"`
+	Omzet   int64  `json:"omzet"`
+	Profit  int64  `json:"profit"`
 }
 
 func (s *Store) Report(days int) (*Laporan, error) {
@@ -223,16 +223,16 @@ func (s *Store) Report(days int) (*Laporan, error) {
 // ---------- Schedules ----------
 
 type Schedule struct {
-	ID           int64  `json:"id"`
-	Tipe         string `json:"tipe"`
-	Label        string `json:"label"`
-	CatalogID    int64  `json:"catalog_id"`
-	Nomor        string `json:"nomor"`
-	Jam          string `json:"jam"`
-	IntervalHari int    `json:"interval_hari"`
+	ID            int64  `json:"id"`
+	Tipe          string `json:"tipe"`
+	Label         string `json:"label"`
+	CatalogID     int64  `json:"catalog_id"`
+	Nomor         string `json:"nomor"`
+	Jam           string `json:"jam"`
+	IntervalHari  int    `json:"interval_hari"`
 	TerakhirJalan string `json:"terakhir_jalan"`
-	Aktif        bool   `json:"aktif"`
-	ChatID       string `json:"chat_id"`
+	Aktif         bool   `json:"aktif"`
+	ChatID        string `json:"chat_id"`
 }
 
 func (s *Store) ListSchedules() ([]Schedule, error) {

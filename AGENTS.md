@@ -27,13 +27,7 @@ Env:
 - `AP_DB` (default data/agenpulsa.db)
 - `AP_PROFILE` (default profile/) — user-data-dir Chromium; cookie login isipulsa di sini
 
-Cross compile Armbian aarch64:
-
-```bash
-GOOS=linux GOARCH=arm64 go build -o agenpulsa-server-linux-arm64 .
-```
-
-Chromium: rod auto-download; fallback cari binary playwright (`/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome`) atau `/usr/bin/chromium`.
+Chromium: rod auto-download; fallback `/usr/bin/chromium`, `/usr/bin/chromium-browser`, atau `chromium` di PATH.
 
 ## Setup awal
 
@@ -47,6 +41,8 @@ INSERT INTO settings(key,value) VALUES('paypan_secret','SECRET-SHARED');
 ```
 
 3. Tambah katalog (POST /api/v1/catalog dengan key admin).
+
+Auth admin: key cocok dengan settings `admin_key` (constant-time) ATAU ada di `api_keys` dengan `boleh_admin=1`.
 
 ## API v1
 
@@ -107,6 +103,8 @@ go test ./...     # normalisasi nomor, parse harga, boundary maintenance, ref id
 go vet ./...
 ```
 
+Test hermetic: SQLite di t.TempDir + httptest, browser rod tidak jalan (lazy). Butuh Go 1.25.
+
 ## Status migrasi
 
 - Server core: SKELETON JALAN (order engine rod, queue, scheduler, API, web admin, webhook paypan).
@@ -116,11 +114,12 @@ go vet ./...
 ## Layout
 
 ```
-main.go              # bootstrap
+main.go              # bootstrap (embed web/, start worker + scheduler + API)
 main_test.go         # test utama
+web_test.go          # testWebFS embed + driver sqlite untuk test
 web/index.html       # web admin (embed)
-internal/db/         # schema.sql + store.go (SQLite, WAL)
-internal/engine/     # rod: order/search/cekstatus, queue worker, guard
-internal/scheduler/  # jadwal WIB harian/interval/sekali
-internal/api/        # routes, auth API key, paypan webhook
+internal/db/         # db.go (Open, pragma WAL) + store.go (CRUD) + schema.sql (embed)
+internal/engine/     # rod: order/search/cekstatus, queue worker, guard, cari chromium
+internal/scheduler/  # jadwal WIB harian/interval/sekali, loop 30 detik
+internal/api/        # api.go (routes, auth API key) + paypan.go (webhook HMAC)
 ```

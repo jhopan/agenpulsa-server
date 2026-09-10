@@ -5,107 +5,595 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AgenPulsa Server</title>
 <style>
-:root{--bg:#0f1115;--card:#171a21;--fg:#e6e9ef;--mut:#8a93a6;--acc:#4f8cff;--ok:#3fb950;--bad:#f85149}
-*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
-.wrap{max-width:960px;margin:0 auto;padding:20px}
-h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
-.card{background:var(--card);border:1px solid #232836;border-radius:10px;padding:16px;margin-bottom:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.kpi{font-size:24px;font-weight:700}.lbl{color:var(--mut);font-size:13px}
+*{box-sizing:border-box}
+body{font-family:system-ui;background:#f2f4f8;margin:0}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:230px;background:#101828;color:#cbd5e1;padding:18px 14px;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 20px;border-bottom:1px solid #1e293b;margin-bottom:14px}
+.brand .dot{width:36px;height:36px;border-radius:10px;background:#1a7f37;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex-shrink:0}
+.brand b{color:#fff;font-size:16px;display:block;line-height:1.1}
+.brand small{color:#64748b;font-size:11px}
+.menu a{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;color:#cbd5e1;text-decoration:none;font-size:14px;font-weight:500;margin-bottom:4px;cursor:pointer}
+.menu a:hover{background:#1e293b;color:#fff}
+.menu a.on{background:#1a7f37;color:#fff;font-weight:600}
+.menu .ico{width:20px;text-align:center;flex-shrink:0}
+.sidebar .foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid #1e293b;font-size:12px;color:#64748b}
+.main{margin-left:230px;flex:1;min-width:0}
+header{background:#fff;border-bottom:1px solid #e4e7ec;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0;color:#101828}
+header .right{display:flex;align-items:center;gap:14px}
+header .who{font-size:13px;color:#667085}
+header .out{color:#b42318;text-decoration:none;font-size:13px;font-weight:600;padding:7px 14px;border:1px solid #fda29b;border-radius:8px;cursor:pointer;background:#fff}
+header .out:hover{background:#fee4e2}
+.content{max-width:980px;margin:24px auto;padding:0 24px}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 6px rgba(0,0,0,.06)}
+h2{margin:0 0 12px;font-size:16px;color:#101828}
 table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #232836}
-th{color:var(--mut);font-weight:600}
-input,select,button{background:#1d2230;border:1px solid #2c3348;color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit}
-button{cursor:pointer;background:var(--acc);border:0;color:#fff}
-button.ghost{background:transparent;border:1px solid #2c3348}
-button.bad{background:var(--bad)}
-.st{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600}
-.st.success{background:#123d20;color:var(--ok)}.st.failed,.st.cancelled{background:#3d1416;color:var(--bad)}
-.st.queued,.st.running,.st.pending_payment{background:#0e2a4d;color:#79b8ff}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-#key{width:220px}.msg{color:var(--mut);font-size:13px;min-height:18px}
+th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
+th{color:#667085;font-weight:600;background:#f9fafb}
+td.empty{text-align:center;color:#98a2b3;padding:18px}
+td small{color:#98a2b3;font-size:12px;white-space:nowrap}
+.money{font-variant-numeric:tabular-nums;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.06);text-align:center;cursor:pointer}
+.stat:hover{box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.stat .n{font-size:26px;font-weight:800;color:#101828;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:#667085;margin-top:2px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.success{background:#d4edda;color:#186a3b}
+.failed,.cancelled{background:#f8d7da;color:#8a1c1c}
+.queued,.running,.pending_payment{background:#fff3cd;color:#8a6d00}
+input,select,textarea{padding:8px;border:1px solid #d0d5dd;border-radius:8px;margin:4px 0;font-size:14px}
+input:focus,select:focus,textarea:focus{outline:2px solid #1a7f37;border-color:#1a7f37}
+button{padding:8px 14px;background:#1a7f37;color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+button:hover{background:#166f30}
+button.del{background:#b42318}button.del:hover{background:#912018}
+button.sec{background:#fff;color:#344054;border:1px solid #d0d5dd}button.sec:hover{background:#f9fafb}
+button.big{padding:11px 18px;font-size:14px;width:100%}
+label{font-size:13px;color:#344054;font-weight:600;display:block;margin:10px 0 4px}
+small{color:#667085}
+.flash{background:#d4edda;color:#186a3b;padding:10px 14px;border-radius:8px;margin-bottom:14px}
+.flash.err{background:#fee4e2;color:#b42318}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+@media(max-width:800px){.sidebar{display:none}.main{margin-left:0}}
+.tab{display:none}.tab.on{display:block}
+.kv{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:14px}
+.kv b{color:#101828}
+.btnrow{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.btnrow button{flex:1;min-width:150px}
 </style>
 </head>
 <body>
-<div class="wrap">
-<h1>AgenPulsa Server</h1>
-<div class="row" style="margin-bottom:16px">
-  <input id="key" placeholder="API Key" oninput="localStorage.apkey=this.value">
-  <span class="lbl" id="wib"></span>
-  <span id="maint"></span>
+<div class="layout">
+<div class="sidebar">
+<div class="brand"><div class="dot">A</div><div><b>AgenPulsa</b><small>by JhopanStore</small></div></div>
+<div class="menu">
+<a data-tab="dash" class="on"><span class="ico">▤</span> Dashboard</a>
+<a data-tab="akun"><span class="ico">◉</span> Akun Login</a>
+<a data-tab="katalog"><span class="ico">▦</span> Katalog</a>
+<a data-tab="beli"><span class="ico">🛒</span> Pembelian</a>
+<a data-tab="laporan"><span class="ico">☰</span> Laporan</a>
+<a data-tab="set"><span class="ico">⚙</span> Pengaturan</a>
+</div>
+<div class="foot">v1.1 · JhopanStore</div>
+</div>
+<div class="main">
+<header><h1 id="judul">Dashboard</h1>
+<div class="right"><span class="who" id="wib">—</span><button class="out" id="logout">Logout</button></div></header>
+<div class="content">
+<div id="flash" class="flash" style="display:none"></div>
+
+<!-- ============ DASHBOARD ============ -->
+<div class="tab on" id="tab-dash">
+<div class="stats">
+<div class="stat" onclick="show('akun')"><div class="n" id="login">-</div><div class="l">Login isipulsa</div></div>
+<div class="stat" onclick="show('akun')"><div class="n" id="saldo">-</div><div class="l">Saldo</div></div>
+<div class="stat"><div class="n" id="rSukses">-</div><div class="l">Sukses / gagal</div></div>
+<div class="stat"><div class="n" id="rOmzet">-</div><div class="l">Omzet</div></div>
+<div class="stat"><div class="n" id="rProfit">-</div><div class="l">Profit</div></div>
+<div class="stat"><div class="n" id="rModal">-</div><div class="l">Modal</div></div>
+</div>
+<div class="card"><h2>Order terakhir</h2>
+<table id="orders">
+<tr><th>Waktu</th><th>Paket</th><th>Nomor</th><th class="money">Modal</th><th class="money">Jual</th><th>Status</th><th>Pesan</th></tr>
+<tbody></tbody>
+</table></div>
 </div>
 
-<div class="card grid">
-  <div><div class="lbl">Login</div><div class="kpi" id="login">-</div></div>
-  <div><div class="lbl">Saldo</div><div class="kpi" id="saldo">-</div></div>
+<!-- ============ AKUN LOGIN ============ -->
+<div class="tab" id="tab-akun">
+<div class="card">
+<h2>Status Akun isipulsa</h2>
+<div class="kv"><span>Status login</span><b id="akLogin">-</b></div>
+<div class="kv"><span>Nama akun</span><b id="akNama">-</b></div>
+<div class="kv"><span>Saldo</span><b id="akSaldo">-</b></div>
+<div class="kv"><span>Folder profile</span><b id="akProfile" style="font-size:12px">-</b></div>
+<div id="akMasalah" style="display:none;color:#b42318;background:#fee4e2;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px"></div>
+<div class="btnrow">
+<button id="btnCek" onclick="cekAkun()">↻ Cek Status</button>
+<button id="btnGanti" class="del" onclick="hapusAkun()">🗑 Hapus Akun (profil + cookies)</button>
+</div>
+<p><small>Hapus Akun: bersihkan semua cookies/sesi isipulsa dari server. Setelah itu tinggal inject cookies akun baru.</small></p>
 </div>
 
-<h2>Laporan</h2>
-<div class="card grid">
-  <div><div class="lbl">Sukses (periode)</div><div class="kpi" id="rSukses">-</div></div>
-  <div><div class="lbl">Modal</div><div class="kpi" id="rModal">-</div></div>
-  <div><div class="lbl">Omzet</div><div class="kpi" id="rOmzet">-</div></div>
-  <div><div class="lbl">Profit</div><div class="kpi" id="rProfit">-</div></div>
-  <div class="row"><select id="days" onchange="loadReport()"><option value="1">Harian</option><option value="7">Mingguan</option><option value="30">Bulanan</option></select></div>
+<div class="card">
+<h2>Login via Cookies <span class="badge success">paling gampang</span></h2>
+<p><small>Login isipulsa di HP/PC sendiri → pasang ekstensi <b>Cookie-Editor</b> → buka isipulsa.web.id → tombol <b>Export</b> di ekstensi → upload file hasil export ATAU paste di bawah → Inject. Cookie disimpan permanen ke profile server, worker langsung pakai.</small></p>
+<div class="row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+<input type="file" id="cFile" accept=".json,application/json" style="padding:6px;width:auto">
+<button class="sec" onclick="uploadCookieFile()">📤 Upload File</button>
+</div>
+<p style="margin:0 0 6px"><small>atau paste manual:</small></p>
+<textarea id="cCookies" rows="6" style="width:100%;font-family:monospace;font-size:12px;padding:8px" placeholder='[{"name":"session","value":"...","domain":".isipulsa.web.id"}, ...]'></textarea>
+<div class="btnrow" style="margin-top:10px">
+<button onclick="importCookies()">📥 Inject Cookies</button>
+</div>
 </div>
 
-<h2>Order Terakhir</h2>
-<div class="card"><table id="orders"><thead><tr><th>#</th><th>Paket</th><th>Nomor</th><th>Modal</th><th>Jual</th><th>Status</th><th>Pesan</th></tr></thead><tbody></tbody></table></div>
+<div class="card">
+<h2>Nama akun (opsional)</h2>
+<p><small>Simpan label akun biar gampang dikenali di dashboard.</small></p>
+<div class="row" style="display:flex;gap:10px">
+<input id="setNama" placeholder="misal: agenpulsa-0812" style="flex:1">
+<button onclick="simpanNama()">Simpan</button>
+</div>
+</div>
+</div>
 
-<h2>Katalog</h2>
-<div class="card"><table id="catalog"><thead><tr><th>#</th><th>Label</th><th>Tab</th><th>Voucher</th><th>Modal</th><th>Harga Jual</th><th></th></tr></thead><tbody></tbody></table>
-<p class="msg">Tambah via API admin (POST /api/v1/catalog) — UI form menyusul.</p></div>
+<!-- ============ KATALOG ============ -->
+<div class="tab" id="tab-katalog">
+<div class="card">
+<h2>Cari Paket isipulsa</h2>
+<p><small>Isi nama paket (mis. "Ilmupedia 22GB" atau "Kuota Game") → Cari → pilih dari daftar → data masuk form bawah. Harga modal terisi otomatis, tinggal set harga jual.</small></p>
+<div class="row" style="display:flex;gap:10px">
+<input id="sQuery" placeholder="misal: Ilmupedia 22GB" style="flex:1" onkeydown="if(event.key==='Enter')cariPaket()">
+<button onclick="cariPaket()">🔍 Cari</button>
+</div>
+<div id="sHasil" style="display:none;margin-top:12px">
+<table id="sTable">
+<tr><th>Paket</th><th>Operator</th><th class="money">Harga (modal)</th><th></th></tr>
+<tbody></tbody>
+</table>
+</div>
+</div>
+<div class="card">
+<h2 id="kFormJudul">Tambah Katalog</h2>
+<input type="hidden" id="kID">
+<div class="grid2">
+<div><label>Label / nama jualan (bebas)</label><input id="kLabel" style="width:100%" placeholder="Masa Aktif XL 1 Bulan + Bonus Game"></div>
+<div><label>Produk (tab isipulsa)</label><input id="kTab" style="width:100%" value="Paket Kuota" placeholder="Paket Kuota / Pulsa"></div>
+<div><label>Voucher ID (jangan diubah)</label><input id="kVoucher" style="width:100%" placeholder="misal: 10137"></div>
+<div><label>Nama asli isipulsa (jangan diubah — verifikasi order)</label><input id="kCari" style="width:100%" placeholder="misal: Kuota Ketengan Ilmupedia 22GB, 7 hari"></div>
+<div><label>Harga modal (dari isipulsa)</label><input id="kMax" type="number" style="width:100%" placeholder="13749"></div>
+<div><label>Harga jual</label><input id="kJual" type="number" style="width:100%" placeholder="16000"></div>
+</div>
+<label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="kAktif" checked style="width:auto"> Aktif</label>
+<div class="btnrow">
+<button onclick="simpanKatalog()">💾 Simpan</button>
+<button class="sec" onclick="resetForm()">Bersihkan Form</button>
+</div>
+</div>
+<div class="card">
+<h2>Daftar Katalog</h2>
+<table id="catalog">
+<tr><th>#</th><th>Label</th><th>Tab</th><th>Voucher</th><th class="money">Modal</th><th class="money">Harga Jual</th><th></th></tr>
+<tbody></tbody>
+</table>
+<p><small>Klik <b>Edit</b> untuk mengubah — data masuk ke form atas.</small></p>
+</div>
+</div>
 
+<!-- ============ PEMBELIAN ============ -->
+<div class="tab" id="tab-beli">
+<div class="card">
+<h2>Pembelian
+<span style="float:right">
+<select id="beliMode" onchange="beliModeChange()" style="font-size:14px">
+<option value="manual">Manual (sekarang)</option>
+<option value="jadwal">Jadwal (otomatis)</option>
+</select></span></h2>
+
+<!-- manual -->
+<div id="beli-manual">
+<p><small>Pilih katalog, isi nomor tujuan, order langsung masuk queue (sumber: admin).</small></p>
+<div class="grid2">
+<div><label>Katalog</label><select id="mCatalog" style="width:100%"></select></div>
+<div><label>Nomor tujuan</label><input id="mNomor" style="width:100%" placeholder="08xxxxxxxxxx" onkeydown="if(event.key==='Enter')beliManual()"></div>
+</div>
+<div class="btnrow">
+<button onclick="beliManual()">🛒 Beli Sekarang</button>
+</div>
+</div>
+
+<!-- jadwal -->
+<div id="beli-jadwal" style="display:none">
+<div class="card" style="box-shadow:none;border:1px solid #eee;margin-bottom:14px;padding:14px">
+<h2 style="font-size:14px">Tambah Jadwal</h2>
+<div class="grid2">
+<div><label>Label</label><input id="jLabel" style="width:100%" placeholder="mis. Kuota harian jam 7"></div>
+<div><label>Katalog</label><select id="jCatalog" style="width:100%"></select></div>
+<div><label>Nomor tujuan</label><input id="jNomor" style="width:100%" placeholder="08xxxxxxxxxx"></div>
+<div><label>Tipe</label><select id="jTipe" style="width:100%" onchange="jTipeChange()">
+<option value="harian">Harian (tiap jam yang sama)</option>
+<option value="sekali">Sekali (tanggal+jam tertentu)</option>
+<option value="interval">Interval (tiap N hari)</option>
+</select></div>
+<div id="jJamWrap"><label>Jam (WIB)</label><input id="jJam" style="width:100%" placeholder="07:30"></div>
+<div id="jTglWrap" style="display:none"><label>Tanggal (DD/MM/YYYY)</label><input id="jTgl" style="width:100%" placeholder="22/08/2026"></div>
+<div id="jIntWrap" style="display:none"><label>Interval hari</label><input id="jInt" type="number" value="7" min="1" style="width:100%"></div>
+</div>
+<div class="btnrow" style="margin-top:10px">
+<button onclick="jadwalAdd()">➕ Tambah Jadwal</button>
+</div>
+<p><small>Format jam: HH:MM 24 jam, WIB. Interval = beli tiap N hari pada jam yang ditentukan. Semua jadwal lewat guard yang sama (maintenance 23:40-00:35, harga naik, sesi login).</small></p>
+</div>
+<h2 style="font-size:14px">Daftar Jadwal</h2>
+<table id="jadwalTbl">
+<tr><th>Label</th><th>Nomor</th><th>Jadwal</th><th>Status</th><th></th></tr>
+<tbody></tbody>
+</table>
+</div>
+
+</div>
+</div>
+
+<!-- ============ LAPORAN ============ -->
+<div class="tab" id="tab-laporan">
+<div class="card">
+<h2>Periode <select id="days" onchange="loadReport()"><option value="1">Harian</option><option value="7">Mingguan</option><option value="30">Bulanan</option></select></h2>
+<div class="stats">
+<div class="stat"><div class="n" id="lSukses">-</div><div class="l">Sukses / gagal</div></div>
+<div class="stat"><div class="n" id="lModal">-</div><div class="l">Modal</div></div>
+<div class="stat"><div class="n" id="lOmzet">-</div><div class="l">Omzet</div></div>
+<div class="stat"><div class="n" id="lProfit">-</div><div class="l">Profit</div></div>
+</div>
+</div>
+<div class="card"><h2>Order terakhir (semua status)</h2>
+<table id="lOrders">
+<tr><th>Waktu</th><th>Paket</th><th>Nomor</th><th class="money">Modal</th><th class="money">Jual</th><th>Status</th><th>Pesan</th></tr>
+<tbody></tbody>
+</table></div>
+</div>
+
+<!-- ============ PENGATURAN ============ -->
+<div class="tab" id="tab-set">
+<div class="card">
+<h2>Admin Web</h2>
+<div class="grid2">
+<div><label>Username admin</label><input id="sUser" style="width:100%" placeholder="admin"></div>
+<div><label>Password admin (kosong = tidak diubah)</label><input id="sPass" type="password" style="width:100%" placeholder="••••••••"></div>
+</div>
+</div>
+<div class="card">
+<h2>Integrasi</h2>
+<div class="grid2">
+<div><label>URL server (publik, untuk client & Paypan)</label><input id="sUrl" style="width:100%" placeholder="http://192.168.1.10:8081"></div>
+<div><label>Paypan secret (HMAC webhook)</label><input id="sPaypan" style="width:100%" placeholder="SECRET-SHARED"></div>
+</div>
+<div class="grid2">
+<div><label>Folder profile Chromium</label><input id="sProfile" style="width:100%" disabled></div>
+<div></div>
+</div>
+</div>
+<div class="card">
+<h2>API Key client (bot WA / Telegram)</h2>
+<p><small>Key dipakai client via header <code>X-API-Key</code>. Boleh order = bisa buat order; Admin = bisa kelola katalog juga.</small></p>
+<table id="apikeys">
+<tr><th>Key</th><th>Nama</th><th>Order</th><th>Admin</th><th></th></tr>
+<tbody></tbody>
+</table>
+<h2 style="margin-top:18px">Tambah Key Baru</h2>
+<div class="grid2">
+<div><label>Nama (mis. Bot WA, Bot Telegram)</label><input id="akNama" style="width:100%" placeholder="Bot WA"></div>
+<div><label>Key (kosong = auto-generate aman)</label><input id="akKey" style="width:100%" placeholder="AP-XXXXXXXX"></div>
+</div>
+<label style="display:flex;align-items:center;gap:12px;margin-top:8px">
+<input type="checkbox" id="akOrder" checked style="width:auto"> Boleh order
+<input type="checkbox" id="akAdmin" style="width:auto"> Boleh admin
+</label>
+<div class="btnrow">
+<button onclick="tambahKey()">➕ Tambah Key</button>
+</div>
+</div>
+<button class="big" onclick="simpanSet()">💾 Simpan Pengaturan</button>
+</div>
+
+</div>
+</div>
 </div>
 <script>
-const key=()=>localStorage.apkey||'';
 const rp=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id);
 async function api(path,opt={}){
-  const r=await fetch(path,{...opt,headers:{'X-API-Key':key(),'Content-Type':'application/json'}});
+  const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json'}});
+  if(r.status===401){location.href='/';throw new Error('redirect')}
   if(!r.ok) throw new Error((await r.json()).error||r.status);
   return r.json();
 }
+function flash(msg,err){const f=$('flash');f.textContent=msg;f.className='flash'+(err?' err':'');f.style.display='block';setTimeout(()=>f.style.display='none',4000)}
+
+const judul={dash:'Dashboard',akun:'Akun Login',katalog:'Katalog',beli:'Pembelian',laporan:'Laporan',set:'Pengaturan'};
+function show(t){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  $('tab-'+t).classList.add('on');
+  document.querySelectorAll('.menu a').forEach(a=>a.classList.toggle('on',a.dataset.tab===t));
+  $('judul').textContent=judul[t];
+  if(t==='akun')cekAkun();
+  if(t==='katalog')loadCatalog();
+  if(t==='beli')loadBeli();
+  if(t==='laporan')loadReport();
+  if(t==='set')loadSet();
+}
+document.querySelectorAll('.menu a').forEach(a=>a.onclick=()=>show(a.dataset.tab));
+
+// ---------- PEMBELIAN ----------
+let katalogCache=[];
+function beliModeChange(){
+  const m=$('beliMode').value;
+  $('beli-manual').style.display=m==='manual'?'block':'none';
+  $('beli-jadwal').style.display=m==='jadwal'?'block':'none';
+  if(m==='jadwal')loadJadwal();
+}
+function isiKatalogSelect(sel){
+  sel.innerHTML='';
+  (katalogCache||[]).filter(k=>k.aktif).forEach(k=>{
+    sel.insertAdjacentHTML('beforeend',`<option value="${k.id}">${esc(k.label)} — ${rp(k.harga_jual)}</option>`);
+  });
+}
+async function loadBeli(){
+  try{
+    katalogCache=await api('/api/v1/catalog')||[];
+    isiKatalogSelect($('mCatalog'));isiKatalogSelect($('jCatalog'));
+    loadJadwal();
+  }catch(e){flash(e.message,1)}
+}
+async function beliManual(){
+  const cid=+$('mCatalog').value, nomor=$('mNomor').value.trim();
+  if(!cid){flash('Pilih katalog dulu (tambah di tab Katalog)',1);return}
+  if(!nomor){flash('Isi nomor tujuan',1);return}
+  try{
+    const o=await api('/api/v1/beli',{method:'POST',body:JSON.stringify({catalog_id:cid,nomor:nomor})});
+    flash('Order #'+(o.id||'?')+' masuk queue — ref '+(o.ref||''));
+    $('mNomor').value='';
+    loadOrders();
+  }catch(e){flash(e.message,1)}
+}
+function jTipeChange(){
+  const t=$('jTipe').value;
+  $('jJamWrap').style.display=t==='sekali'?'none':'block';
+  $('jTglWrap').style.display=t==='sekali'?'block':'none';
+  $('jIntWrap').style.display=t==='interval'?'block':'none';
+}
+async function loadJadwal(){
+  try{
+    const js=await api('/api/v1/jadwal').catch(()=>[]);
+    const tb=document.querySelector('#jadwalTbl tbody');tb.innerHTML='';
+    if(!(js||[]).length){tb.innerHTML='<tr><td colspan="5" class="empty">Belum ada jadwal</td></tr>';return}
+    js.forEach(j=>{
+      const sked=j.tipe==='sekali'?j.jam:(j.tipe==='interval'?`tiap ${j.interval_hari} hari @ ${j.jam}`:`harian @ ${j.jam}`);
+      tb.insertAdjacentHTML('beforeend',`<tr><td>${esc(j.label)}</td><td>${esc(j.nomor)}</td><td><small>${esc(sked)} WIB</small></td><td>${j.aktif?'<span class="badge success">aktif</span>':'<span class="badge failed">off</span>'}</td><td><button class="sec" onclick="jadwalToggle(${j.id})">${j.aktif?'Matikan':'Nyalakan'}</button> <button class="del" onclick="jadwalDel(${j.id})">Hapus</button></td></tr>`);
+    });
+  }catch(e){}
+}
+async function jadwalAdd(){
+  const tipe=$('jTipe').value;
+  let jam=$('jJam').value.trim();
+  if(tipe==='sekali')jam=($('jTgl').value.trim())+' '+($('jJam').value.trim()||'00:00');
+  const body={tipe:tipe,label:$('jLabel').value.trim(),catalog_id:+$('jCatalog').value,
+    nomor:$('jNomor').value.trim(),jam:jam,interval_hari:+$('jInt').value||1};
+  try{
+    await api('/api/v1/jadwal',{method:'POST',body:JSON.stringify(body)});
+    flash('Jadwal ditambah');
+    $('jLabel').value='';$('jNomor').value='';
+    loadJadwal();
+  }catch(e){flash(e.message,1)}
+}
+async function jadwalToggle(id){
+  try{await api('/api/v1/jadwal/'+id+'/toggle',{method:'POST'});loadJadwal()}catch(e){flash(e.message,1)}
+}
+async function jadwalDel(id){
+  if(!confirm('Hapus jadwal #'+id+'?'))return;
+  try{await api('/api/v1/jadwal/'+id,{method:'DELETE'});flash('Jadwal dihapus');loadJadwal()}catch(e){flash(e.message,1)}
+}
+
 async function loadStatus(){
   try{
     const s=await api('/api/v1/status');
-    document.getElementById('login').textContent=s.login?'AKTIF':'HABIS';
-    document.getElementById('login').style.color=s.login?'var(--ok)':'var(--bad)';
-    document.getElementById('saldo').textContent=s.saldo;
-    document.getElementById('wib').textContent=s.wib;
-    document.getElementById('maint').innerHTML=s.maintenance?'<span class="st failed">MAINTENANCE</span>':'';
-  }catch(e){document.getElementById('login').textContent='key salah?'}
+    const el=$('login');
+    el.textContent=s.login?'AKTIF':'HABIS';
+    el.style.color=s.login?'#186a3b':'#b42318';
+    $('saldo').textContent=s.saldo;
+    $('wib').textContent=s.wib;
+  }catch(e){}
 }
 async function loadReport(){
   try{
-    const d=document.getElementById('days').value;
+    const d=$('days').value;
     const l=await api('/api/v1/report?days='+d);
-    document.getElementById('rSukses').textContent=l.sukses+' / gagal '+l.gagal;
-    document.getElementById('rModal').textContent=rp(l.modal);
-    document.getElementById('rOmzet').textContent=rp(l.omzet);
-    const p=document.getElementById('rProfit');p.textContent=rp(l.profit);
-    p.style.color=l.profit>=0?'var(--ok)':'var(--bad)';
+    $('lSukses').textContent=l.sukses+' / '+l.gagal;
+    $('lModal').textContent=rp(l.modal);
+    $('lOmzet').textContent=rp(l.omzet);
+    const p=$('lProfit');p.textContent=rp(l.profit);
+    p.style.color=l.profit>=0?'#186a3b':'#b42318';
+    $('rSukses').textContent=l.sukses+' / '+l.gagal;
+    $('rModal').textContent=rp(l.modal);
+    $('rOmzet').textContent=rp(l.omzet);
+    const pr=$('rProfit');pr.textContent=rp(l.profit);
+    pr.style.color=l.profit>=0?'#186a3b':'#b42318';
   }catch(e){}
 }
 async function loadOrders(){
   try{
     const os=await api('/api/v1/orders?limit=20');
-    const tb=document.querySelector('#orders tbody');tb.innerHTML='';
-    (os||[]).forEach(o=>{
-      tb.insertAdjacentHTML('beforeend',`<tr><td>${o.id}</td><td>${o.label}</td><td>${o.nomor}</td><td>${rp(o.modal)}</td><td>${rp(o.harga_jual)}</td><td><span class="st ${o.status}">${o.status}</span></td><td class="lbl">${o.pesan||''}</td></tr>`);
-    });
+    const rows=(os||[]).map(o=>`<tr><td><small>${esc((o.created_at||'').slice(5,16))}</small></td><td>${esc(o.label)}</td><td>${esc(o.nomor)}</td><td class="money">${rp(o.modal)}</td><td class="money"><b>${rp(o.harga_jual)}</b></td><td><span class="badge ${o.status}">${o.status}</span></td><td><small>${esc(o.pesan||'')}</small></td></tr>`).join('');
+    const empty='<tr><td colspan="7" class="empty">Belum ada order</td></tr>';
+    document.querySelector('#orders tbody').innerHTML=rows||empty;
+    document.querySelector('#lOrders tbody').innerHTML=rows||empty;
   }catch(e){}
 }
 async function loadCatalog(){
   try{
     const its=await api('/api/v1/catalog?all=1');
     const tb=document.querySelector('#catalog tbody');tb.innerHTML='';
+    if(!(its||[]).length){tb.innerHTML='<tr><td colspan="7" class="empty">Belum ada katalog</td></tr>';return}
     (its||[]).forEach(it=>{
-      tb.insertAdjacentHTML('beforeend',`<tr><td>${it.id}</td><td>${it.label}</td><td>${it.tab}</td><td>${it.voucher||'-'}</td><td>${rp(it.harga_max)}</td><td>${rp(it.harga_jual)}</td><td>${it.aktif?'aktif':'off'}</td></tr>`);
+      tb.insertAdjacentHTML('beforeend',`<tr><td>${it.id}</td><td>${esc(it.label)}</td><td>${esc(it.tab)}</td><td>${esc(it.voucher||'-')}</td><td class="money">${rp(it.harga_max)}</td><td class="money"><b>${rp(it.harga_jual)}</b></td><td><button class="sec" onclick='editKatalog(${JSON.stringify(it).replaceAll("'", "&#39;")})'>Edit</button> <button class="del" onclick="hapusKatalog(${it.id})">Hapus</button></td></tr>`);
     });
   }catch(e){}
 }
-if(!localStorage.apkey)localStorage.apkey='';
-document.getElementById('key').value=key();
+function editKatalog(it){
+  $('kID').value=it.id;$('kLabel').value=it.label;$('kTab').value=it.tab;
+  $('kVoucher').value=it.voucher||'';$('kCari').value=it.cari||'';
+  $('kMax').value=it.harga_max;$('kJual').value=it.harga_jual;
+  $('kAktif').checked=!!it.aktif;
+  $('kFormJudul').textContent='Edit Katalog #'+it.id;
+  $('tab-katalog').scrollIntoView({behavior:'smooth'});
+}
+function resetForm(){
+  ['kID','kLabel','kVoucher','kCari','kMax','kJual'].forEach(i=>$(i).value='');
+  $('kTab').value='Paket Kuota';$('kAktif').checked=true;
+  $('kFormJudul').textContent='Tambah Katalog';
+}
+async function cariPaket(){
+  const q=$('sQuery').value.trim();
+  if(!q){flash('Isi nama paket dulu',1);return}
+  const btn=event?event.target:null;
+  try{
+    if(btn){btn.disabled=true;btn.textContent='⏳ Mencari...'}
+    const items=await api('/api/v1/search?q='+encodeURIComponent(q));
+    const tb=document.querySelector('#sTable tbody');tb.innerHTML='';
+    $('sHasil').style.display='block';
+    if(!(items||[]).length){tb.innerHTML='<tr><td colspan="4" class="empty">Tidak ada paket yang cocok</td></tr>';return}
+    items.forEach(it=>{
+      tb.insertAdjacentHTML('beforeend',`<tr><td>${esc(it.nama)}</td><td><small>${esc(it.operator)}</small></td><td class="money">${rp(it.harga)}</td><td><button onclick='pilihPaket(${JSON.stringify(it).replaceAll("'", "&#39;")})'>Pilih</button></td></tr>`);
+    });
+  }catch(e){flash(e.message,1)}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔍 Cari'}}
+}
+function pilihPaket(it){
+  $('kID').value='';
+  $('kLabel').value=it.nama;          // judul marketing — bebas diedit
+  $('kTab').value=it.produk==='paket_kuota'?'Paket Kuota':(it.produk==='pulsa'?'Pulsa':it.produk);
+  $('kVoucher').value=it.voucher;
+  $('kCari').value=it.nama;           // nama asli isipulsa (anti-drift + fallback)
+  $('kMax').value=it.harga;
+  $('kJual').value=Math.ceil(it.harga*1.15/100)*100; // saran markup 15%, dibulatkan ke 100
+  $('kAktif').checked=true;
+  $('kFormJudul').textContent='Tambah Katalog: '+it.nama;
+  $('kFormJudul').scrollIntoView({behavior:'smooth'});
+  flash('Paket dipilih — Label boleh diubah (nama jualan), jangan ubah Voucher & Nama asli.');
+}
+async function simpanKatalog(){
+  try{
+    const body={label:$('kLabel').value.trim(),tab:$('kTab').value.trim()||'Paket Kuota',voucher:$('kVoucher').value.trim(),cari:$('kCari').value.trim(),harga_max:+$('kMax').value||0,harga_jual:+$('kJual').value||0,aktif:$('kAktif').checked};
+    if(!body.label){flash('Label wajib diisi',1);return}
+    const id=+$('kID').value;
+    if(id)body.id=id;
+    await api('/api/v1/catalog',{method:'POST',body:JSON.stringify(body)});
+    flash(id?'Katalog #'+id+' diupdate':'Katalog ditambah');
+    resetForm();loadCatalog();
+  }catch(e){flash(e.message,1)}
+}
+async function hapusKatalog(id){
+  if(!confirm('Hapus katalog #'+id+'?'))return;
+  try{await api('/api/v1/catalog/'+id,{method:'DELETE'});flash('Katalog #'+id+' dihapus');loadCatalog()}
+  catch(e){flash(e.message,1)}
+}
+async function cekAkun(){
+  try{
+    const a=await api('/api/v1/account');
+    $('akLogin').textContent=a.login?'AKTIF':'HABIS';
+    $('akLogin').style.color=a.login?'#186a3b':'#b42318';
+    $('akNama').textContent=a.nama||a.username||'-';
+    $('akSaldo').textContent=a.saldo;
+    $('akProfile').textContent=a.profile;
+    const m=$('akMasalah');
+    if(a.login){flash('Login isipulsa AKTIF — saldo '+a.saldo)}
+    if(a.masalah){m.textContent=a.masalah;m.style.display='block'}else m.style.display='none';
+  }catch(e){flash(e.message,1)}
+}
+async function importCookies(){
+  const raw=$('cCookies').value.trim();
+  if(!raw){flash('Paste cookie JSON dulu',1);return}
+  try{
+    JSON.parse(raw); // validasi lokal dulu
+  }catch(e){flash('JSON tidak valid: '+e.message,1);return}
+  try{
+    const r=await api('/api/v1/account/cookies',{method:'POST',body:JSON.stringify({cookies:raw})});
+    flash(r.pesan||r.jumlah+' cookie diinject');
+    $('cCookies').value='';
+    cekAkun();
+  }catch(e){flash(e.message,1)}
+}
+function uploadCookieFile(){
+  const f=$('cFile').files[0];
+  if(!f){flash('Pilih file .json dulu',1);return}
+  const rd=new FileReader();
+  rd.onload=async()=>{
+    try{JSON.parse(rd.result)}catch(e){flash('File bukan JSON valid: '+e.message,1);return}
+    try{
+      const r=await api('/api/v1/account/cookies',{method:'POST',body:JSON.stringify({cookies:rd.result})});
+      flash(r.pesan||r.jumlah+' cookie diinject dari '+f.name);
+      $('cFile').value='';
+      cekAkun();
+    }catch(e){flash(e.message,1)}
+  };
+  rd.readAsText(f);
+}
+async function hapusAkun(){
+  if(!confirm('Hapus semua cookies/sesi isipulsa dari server? Setelah ini tinggal inject cookies akun baru.'))return;
+  try{await api('/api/v1/account/relogin',{method:'POST'});flash('Akun dihapus — profile bersih. Inject cookies akun baru.');cekAkun()}
+  catch(e){flash(e.message,1)}
+}
+async function simpanNama(){
+  try{await api('/api/v1/account/username',{method:'POST',body:JSON.stringify({username:$('setNama').value})});flash('Nama akun disimpan');cekAkun()}
+  catch(e){flash(e.message,1)}
+}
+async function loadSet(){
+  try{
+    const s=await api('/api/v1/settings');
+    $('sUser').value=s.admin_user||'';
+    $('sPaypan').value=s.paypan_secret||'';
+    $('sUrl').value=s.server_url||'';
+    $('sProfile').value=s.profile_dir||'';
+    $('setNama').value=s.isipulsa_username||'';
+    const ks=await api('/api/v1/keys').catch(()=>[]);
+    const tb=document.querySelector('#apikeys tbody');tb.innerHTML='';
+    if(!(ks||[]).length){tb.innerHTML='<tr><td colspan="5" class="empty">Belum ada API key</td></tr>';}
+    (ks||[]).forEach(k=>tb.insertAdjacentHTML('beforeend',`<tr><td><code>${esc(k.key)}</code></td><td>${esc(k.nama)}</td><td>${k.boleh_order?'✓':'-'}</td><td>${k.boleh_admin?'✓':'-'}</td><td><button class="del" onclick="hapusKey('${esc(k.key)}')">Hapus</button></td></tr>`));
+  }catch(e){}
+}
+async function tambahKey(){
+  const nama=$('akNama').value.trim();
+  if(!nama){flash('Nama wajib diisi',1);return}
+  try{
+    const r=await api('/api/v1/keys',{method:'POST',body:JSON.stringify({
+      nama:nama,key:$('akKey').value.trim(),boleh_order:$('akOrder').checked,boleh_admin:$('akAdmin').checked})});
+    flash('Key dibuat: '+r.key+' — salin sekarang, gak ditampilkan lagi lengkap dengan izinnya.');
+    $('akNama').value='';$('akKey').value='';$('akOrder').checked=true;$('akAdmin').checked=false;
+    loadSet();
+  }catch(e){flash(e.message,1)}
+}
+async function hapusKey(key){
+  if(!confirm('Hapus API key '+key+'? Client yang pakai key ini langsung gak bisa akses.'))return;
+  try{await api('/api/v1/keys/'+encodeURIComponent(key),{method:'DELETE'});flash('Key dihapus');loadSet()}
+  catch(e){flash(e.message,1)}
+}
+async function simpanSet(){
+  try{
+    const body={};
+    if($('sUser').value.trim())body.admin_user=$('sUser').value.trim();
+    if($('sPass').value)body.admin_pass=$('sPass').value;
+    if($('sPaypan').value.trim())body.paypan_secret=$('sPaypan').value.trim();
+    if($('sUrl').value.trim())body.server_url=$('sUrl').value.trim().replace(/\/+$/,'');
+    const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
+    flash('Disimpan: '+(r.changed||[]).join(', '));
+    $('sPass').value='';
+  }catch(e){flash(e.message,1)}
+}
+$('logout').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/'};
 loadStatus();loadReport();loadOrders();loadCatalog();
 setInterval(()=>{loadStatus();loadOrders()},15000);
 </script>
