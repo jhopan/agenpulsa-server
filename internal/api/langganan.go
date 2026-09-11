@@ -20,7 +20,7 @@ type langgananReq struct {
 	Jam       string `json:"jam"`     // HH:MM WIB
 	Tanggal   string `json:"tanggal"` // DD/MM/YYYY (tipe sekali)
 	Interval  int    `json:"interval_hari"`
-	ChatID    string `json:"chat_id"`    // opsional: receipt ke WA/TG customer
+	ChatID    string `json:"chat_id"` // opsional: receipt ke WA/TG customer
 	Callback  string `json:"callback_url"`
 }
 
@@ -54,6 +54,12 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// validasi jadwal (pakai validator sama dengan admin)
+	// LANGGANAN CUSTOMER HANYA SEKALI JALAN — tanpa harian/interval
+	// (QRIS 1x bayar 1x jalan; berulang = ribet refund/expired)
+	if req.Tipe != "sekali" {
+		jsonErr(w, 400, "pembelian terjadwal hanya sekali jalan (tanggal+jam). Tidak ada berulang.")
+		return
+	}
 	jr := &jadwalReq{
 		Tipe: req.Tipe, Label: "langganan " + nomor, CatalogID: req.CatalogID,
 		Nomor: nomor, Jam: req.Jam, Interval: req.Interval,
@@ -76,6 +82,13 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 	}
 	detailJSON, _ := json.Marshal(detail)
 
+	// invoice QRIS paypan (harga = harga_jual katalog)
+	inv, err := a.ppClient.CreateInvoice(it.HargaJual, it.Label+" "+nomor+" (langganan)")
+	if err != nil {
+		jsonErr(w, 502, "gagal buat invoice paypan: "+err.Error())
+		return
+	}
+
 	o := &db.Order{
 		Ref:         ref,
 		Nomor:       nomor,
@@ -84,6 +97,7 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 		Modal:       it.HargaMax,
 		HargaJual:   it.HargaJual,
 		Status:      "pending_payment",
+		InvoiceID:   inv.ID,
 		Sumber:      "langganan",
 		ChatID:      req.ChatID,
 		CallbackURL: req.Callback,
@@ -96,8 +110,12 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 202, map[string]any{
 		"ref":        ref,
 		"status":     "pending_payment",
-		"harga_jual": it.HargaJual,
-		"pesan":      "invoice: bayar QRIS nominal " + strconv.FormatInt(it.HargaJual, 10) + " dengan ref " + ref,
+		"invoice_id": inv.ID,
+		"total":      inv.Total,
+		"pay_url":    inv.PayURL,
+		"qr_url":     inv.QRURL,
+		"expires_at": inv.ExpiresAt,
+		"pesan":      "bayar QRIS total " + strconv.FormatInt(inv.Total, 10) + " — jadwal aktif otomatis setelah paid",
 	})
 }
 

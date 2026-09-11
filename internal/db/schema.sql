@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS orders (
     status TEXT NOT NULL DEFAULT 'queued',  -- pending_payment|queued|running|success|failed|cancelled
     order_id_isipulsa TEXT,
     pesan TEXT,
+    invoice_id TEXT,                        -- id invoice paypan (pending_payment)
     sumber TEXT NOT NULL DEFAULT 'api',     -- api|telegram|wa|paypan|admin|scheduler
     chat_id TEXT,                           -- untuk callback ke client
     callback_url TEXT,

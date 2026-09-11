@@ -1,3 +1,7 @@
+// Package api: webhook Paypan — format ASLI dari API.md:
+//   POST <url>   X-Paypan-Event: order.paid   X-Paypan-Signature: hex HMAC-SHA256(raw body)
+//   {"event":"order.paid","order":{"id":"...","price":25000,"code":12,"total":25012,"paid_at":...}}
+// Cocokkan ke order agenpulsa via invoice_id (disimpan saat create invoice).
 package api
 
 import (
@@ -8,20 +12,19 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-
-	"github.com/jhopan/agenpulsa-server/internal/db"
 )
 
-// Paypan webhook: event payment.paid -> order pending_payment masuk queue.
-// Secret disimpan di settings.key "paypan_secret". Signature header:
-//
-//	X-Paypan-Signature: hex(hmac_sha256(body, secret))
-type paypanEvent struct {
-	Event     string `json:"event"` // "payment.paid" | "payment.expired"
-	InvoiceID string `json:"invoice_id"`
-	Ref       string `json:"ref"` // ref order agenpulsa (= ref invoice paypan)
-	Amount    int64  `json:"amount"`
-	PaidAt    string `json:"paid_at"`
+type paypanOrder struct {
+	ID     string `json:"id"`
+	Price  int64  `json:"price"`
+	Code   int64  `json:"code"`
+	Total  int64  `json:"total"`
+	PaidAt int64  `json:"paid_at"`
+}
+
+type paypanHookPayload struct {
+	Event string      `json:"event"`
+	Order paypanOrder `json:"order"`
 }
 
 func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
@@ -30,9 +33,13 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "body kosong")
 		return
 	}
-	secret := a.store.GetSetting("paypan_secret", "")
+	// secret webhook: env dulu, fallback settings DB.
+	secret := a.ppCfg.Secret
 	if secret == "" {
-		jsonErr(w, 503, "paypan_secret belum diset (tambah di settings)")
+		secret = a.store.GetSetting("paypan_secret", "")
+	}
+	if secret == "" {
+		jsonErr(w, 503, "paypan webhook secret belum diset")
 		return
 	}
 	sig := r.Header.Get("X-Paypan-Signature")
@@ -44,52 +51,34 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ev paypanEvent
+	var ev paypanHookPayload
 	if err := json.Unmarshal(body, &ev); err != nil {
 		jsonErr(w, 400, "json tidak valid")
 		return
 	}
-
-	if ev.Ref == "" {
-		jsonErr(w, 400, "ref kosong")
+	if ev.Event != "order.paid" {
+		// event lain diterima tanpa aksi (jangan bikin paypan retry terus)
+		writeJSON(w, 200, map[string]any{"ok": true, "ignored": ev.Event})
 		return
 	}
-	o, err := a.store.GetOrderByRef(ev.Ref)
+	if ev.Order.ID == "" {
+		jsonErr(w, 400, "order.id kosong")
+		return
+	}
+
+	o, err := a.store.GetOrderByInvoice(ev.Order.ID)
 	if err != nil {
-		jsonErr(w, 404, "order tidak ada untuk ref "+ev.Ref)
+		jsonErr(w, 404, "order tidak ada untuk invoice "+ev.Order.ID)
 		return
 	}
 
-	switch ev.Event {
-	case "payment.expired":
-		if o.Status == "pending_payment" {
-			_ = a.store.UpdateOrderStatus(o.ID, "cancelled", "pembayaran expired", "")
-		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-		return
-
-	case "payment.paid":
-	default:
-		jsonErr(w, 400, "event tidak dikenal: "+ev.Event)
-		return
-	}
-
-	// Idempotensi + validasi status.
+	// Idempotensi: webhook dobel / order sudah diproses -> ok (paypan berhenti retry).
 	if o.Status != "pending_payment" {
-		// Sudah diproses (webhook dobel): balas ok agar paypan berhenti retry.
 		writeJSON(w, 200, map[string]any{"ok": true, "status": o.Status})
 		return
 	}
 
-	// Validasi jumlah: harus sama dengan harga_jual (paypan pakai kode unik).
-	if o.HargaJual > 0 && ev.Amount != o.HargaJual {
-		_ = a.store.UpdateOrderStatus(o.ID, "pending_payment",
-			"jumlah bayar "+strconv.FormatInt(ev.Amount, 10)+" != harga_jual "+strconv.FormatInt(o.HargaJual, 10)+" - butuh cek manual", "")
-		jsonErr(w, 409, "jumlah tidak cocok, order tetap pending")
-		return
-	}
-
-	// Order langganan: paid -> buat jadwal (BUKAN order langsung).
+	// Order langganan: paid -> buat jadwal sekali-jalan (BUKAN order langsung).
 	if o.Sumber == "langganan" {
 		if err := a.langgananAktifkan(o); err != nil {
 			_ = a.store.UpdateOrderStatus(o.ID, "pending_payment",
@@ -101,10 +90,9 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = a.store.UpdateOrderStatus(o.ID, "queued", "pembayaran diterima (paypan invoice "+ev.InvoiceID+")", "")
-	// Bangunkan worker.
+	// Order manual biasa: paid -> masuk queue, worker eksekusi.
+	_ = a.store.UpdateOrderStatus(o.ID, "queued",
+		"pembayaran diterima (paypan invoice "+ev.Order.ID+", total "+strconv.FormatInt(ev.Order.Total, 10)+")", "")
 	a.eng.Wake()
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
-
-var _ = db.NowWIB

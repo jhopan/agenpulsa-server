@@ -36,6 +36,8 @@ func Open(path string) (*Store, error) {
 	if _, err := d.Exec(schemaSQL); err != nil {
 		return nil, err
 	}
+	// Migrasi ringan DB lama: kolom invoice_id (paypan).
+	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN invoice_id TEXT")
 	return &Store{DB: d}, nil
 }
 

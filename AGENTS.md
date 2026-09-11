@@ -60,7 +60,12 @@ Header: `X-API-Key: <key>`
 | GET | `/api/v1/status` | login + saldo + WIB + flag maintenance |
 | GET | `/api/v1/report?days=1\|7\|30` | laporan sukses/gagal/modal/omzet/profit |
 | GET | `/api/v1/maintenance` | flag jam rekap 23:40-00:35 WIB |
-| POST | `/api/webhooks/paypan` | webhook Paypan (HMAC, tanpa API key) |
+| POST | `/api/v1/beli` | pembelian manual admin (QRIS paypan, admin session) |
+| GET/POST | `/api/v1/jadwal` | jadwal admin CRUD (harian/sekali/interval) |
+| POST/DELETE | `/api/v1/jadwal/{id}/toggle`, `/api/v1/jadwal/{id}` | toggle/hapus jadwal |
+| POST | `/api/v1/langganan` | pembelian terjadwal customer (publik, sekali-jalan, QRIS) |
+| GET/POST/DELETE | `/api/v1/keys` (+ `/{key}`) | CRUD API key client |
+| POST | `/webhook` | webhook Paypan `order.paid` (HMAC, tanpa API key) — PATH FIXUS, jangan pindah |
 
 `ref` = idempotency key. Kirim ulang request dengan ref sama → balas order lama, tidak dobel order.
 
@@ -74,20 +79,25 @@ curl -X POST http://localhost:8081/api/v1/orders \
 
 ## Flow Paypan (QRIS)
 
-1. Client buat `POST /api/v1/orders/pending` → status `pending_payment`.
-2. Paypan buat invoice QRIS, nominal = harga_jual (+kode unik opsional di sisi paypan bila pakai match-by-amount).
-3. Bayar masuk → Paypan kirim:
+Paypan production: `https://paypan.jhopan.my.id` (BLS token scope order di settings `paypan_token`, webhook secret di `paypan_secret`). Config bisa dari env `PAYPAN_BASE_URL/PAYPAN_TOKEN/PAYPAN_WEBHOOK_SECRET`.
+
+1. Pembelian (manual admin `/api/v1/beli`, langganan customer `/api/v1/langganan`, atau client `POST /api/v1/orders/pending`) → order `pending_payment` + server panggil `POST /api/invoice` ke Paypan → simpan `invoice_id`, balas `pay_url`/`qr_url`/`total` ke pembayar.
+2. Customer scan QR (total = price + kode unik 3 digit, expired 5 menit) → NotifListen di HP merchant tangkap notif GoPay → Paypan match by total → invoice `paid`.
+3. Paypan kirim webhook:
 
 ```
-POST /api/webhooks/paypan
-X-Paypan-Signature: hex(hmac_sha256(raw_body, paypan_secret))
-{"event":"payment.paid","invoice_id":"...","ref":"<ref order>","amount":18000,"paid_at":"..."}
+POST /webhook
+X-Paypan-Event: order.paid
+X-Paypan-Signature: hex(hmac_sha256(raw_body, webhook_secret))
+{"event":"order.paid","order":{"id":"...","price":...,"code":...,"total":...,"paid_at":...}}
 ```
 
-4. Server cek signature → ref ada → status masih pending → amount == harga_jual → status jadi `queued`, worker eksekusi.
-5. `payment.expired` → order dibatalkan.
+4. Server verifikasi HMAC → cari order by `invoice_id` (idempoten: status bukan pending = ok) →
+   - order manual/client: status → `queued`, worker eksekusi (buy ke isipulsa, saldo isipulsa kepotong)
+   - order langganan: buat schedule sekali-jalan (tanggal+jam pilihan customer), status → `scheduled`; scheduler eksekusi 1x lalu auto-hapus
+5. Invoice expired 5 menit tanpa bayar → order tetap pending_payment (bisa dibuat invoice baru).
 
-Order gagal setelah bayar (maintenance/saldo agen habis): client cek status lalu proses refund lewat API Paypan.
+Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan jelas; refund via admin Paypan (catatan administratif, transfer manual).
 
 ## Guard bawaan
 

@@ -19,14 +19,26 @@ import (
 )
 
 type API struct {
-	store *db.Store
-	eng   *engine.Engine
-	web   fs.FS
+	store    *db.Store
+	eng      *engine.Engine
+	web      fs.FS
+	ppCfg    PaypanConfig
+	ppClient *PaypanClient
 }
 
 func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 	sub, _ := fs.Sub(webFS, "web")
-	return &API{store: store, eng: eng, web: sub}
+	cfg := LoadPaypanConfig()
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = strings.TrimRight(store.GetSetting("paypan_base_url", ""), "/")
+	}
+	if cfg.Token == "" {
+		cfg.Token = strings.TrimSpace(store.GetSetting("paypan_token", ""))
+	}
+	if cfg.Secret == "" {
+		cfg.Secret = strings.TrimSpace(store.GetSetting("paypan_secret", ""))
+	}
+	return &API{store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg)}
 }
 
 func (a *API) Routes() http.Handler {
@@ -84,7 +96,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/langganan", a.langgananBaru)
 
 	// Paypan webhook (HMAC, tanpa API key).
-	mux.HandleFunc("POST /api/webhooks/paypan", a.paypanWebhook)
+	mux.HandleFunc("POST /webhook", a.paypanWebhook)
 
 	// Login admin (username/password -> session cookie).
 	mux.HandleFunc("POST /api/login", a.login)

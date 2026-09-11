@@ -125,8 +125,8 @@ func TestAPISmoke(t *testing.T) {
 	}
 
 	// webhook paypan signature salah -> 403
-	r3, _ := http.Post(srv.URL+"/api/webhooks/paypan", "application/json",
-		strings.NewReader(`{"event":"payment.paid","ref":"r1","amount":100}`))
+	r3, _ := http.Post(srv.URL+"/webhook", "application/json",
+		strings.NewReader(`{"event":"order.paid","order":{"id":"x","price":1,"code":1,"total":2}}`))
 	if r3.StatusCode != 403 {
 		t.Errorf("webhook sig salah harus 403, got %d", r3.StatusCode)
 	}
