@@ -89,6 +89,18 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Order langganan: paid -> buat jadwal (BUKAN order langsung).
+	if o.Sumber == "langganan" {
+		if err := a.langgananAktifkan(o); err != nil {
+			_ = a.store.UpdateOrderStatus(o.ID, "pending_payment",
+				"paid tapi gagal buat jadwal: "+err.Error()+" - butuh cek manual", "")
+			jsonErr(w, 500, "gagal aktifkan jadwal, order tetap pending")
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true, "jadwal_dibuat": true})
+		return
+	}
+
 	_ = a.store.UpdateOrderStatus(o.ID, "queued", "pembayaran diterima (paypan invoice "+ev.InvoiceID+")", "")
 	// Bangunkan worker.
 	a.eng.Wake()

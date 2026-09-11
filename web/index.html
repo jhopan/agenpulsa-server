@@ -219,7 +219,7 @@ small{color:#667085}
 <option value="sekali">Sekali (tanggal+jam tertentu)</option>
 <option value="interval">Interval (tiap N hari)</option>
 </select></div>
-<div id="jJamWrap"><label>Jam (WIB)</label><input id="jJam" style="width:100%" placeholder="07:30"></div>
+<div><label>Jam (WIB, HH:MM)</label><input id="jJam" style="width:100%" placeholder="07:30"></div>
 <div id="jTglWrap" style="display:none"><label>Tanggal (DD/MM/YYYY)</label><input id="jTgl" style="width:100%" placeholder="22/08/2026"></div>
 <div id="jIntWrap" style="display:none"><label>Interval hari</label><input id="jInt" type="number" value="7" min="1" style="width:100%"></div>
 </div>
@@ -362,7 +362,6 @@ async function beliManual(){
 }
 function jTipeChange(){
   const t=$('jTipe').value;
-  $('jJamWrap').style.display=t==='sekali'?'none':'block';
   $('jTglWrap').style.display=t==='sekali'?'block':'none';
   $('jIntWrap').style.display=t==='interval'?'block':'none';
 }

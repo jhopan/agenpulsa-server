@@ -80,6 +80,9 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/jadwal/{id}/toggle", a.auth(true, a.jadwalToggle))
 	mux.HandleFunc("DELETE /api/v1/jadwal/{id}", a.auth(true, a.jadwalDelete))
 
+	// Langganan customer: set jadwal sendiri -> bayar -> jadwal aktif (publik).
+	mux.HandleFunc("POST /api/v1/langganan", a.langgananBaru)
+
 	// Paypan webhook (HMAC, tanpa API key).
 	mux.HandleFunc("POST /api/webhooks/paypan", a.paypanWebhook)
 

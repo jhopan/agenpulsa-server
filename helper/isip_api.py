@@ -97,13 +97,15 @@ def parse_vouchers(html):
         data = json.loads(raw)
     except Exception:
         data = ast.literal_eval(raw)
-    # kolom: [id, produk, ?, operator, nama, harga, ?, desc]
+    # kolom: [voucher, produk, operator_id, nama_operator, nama_paket, harga, ?, desc]
+    # operator_id = ID internal isipulsa (WAJIB di form order: data-operator button)
     items = []
     for d in data:
         try:
             items.append({
                 "voucher": str(d[0]),
                 "produk": str(d[1]),
+                "operator_id": str(d[2]),
                 "operator": str(d[3]),
                 "nama": re.sub(r"<[^>]+>", " ", str(d[4])).strip(),
                 "harga": int(re.sub(r"[^\d]", "", str(d[5])) or 0),
@@ -209,11 +211,22 @@ def op_order(args):
                           f"Batas Rp {args.harga_max:,}".replace(",", ".")))
 
     # 4. POST order (json_format=1, seperti jQuery.post #order_form)
+    #    Field wajib isipulsa: csrf_token, nomor_hp, pembayaran=balance,
+    #    produk, operator (ID internal!), voucher, id_plgn, json_format.
+    operator_id = ""
+    for i in items:
+        if i["voucher"] == voucher:
+            operator_id = i.get("operator_id", "")
+            break
     form = {
         "csrf_token": csrf,
-        "produk": page,
-        "voucher": voucher,
         "nomor_hp": args.nomor,
+        "pembayaran": "balance",
+        "produk": page,
+        "operator": operator_id,
+        "voucher": voucher,
+        "id_plgn": "",
+        "otp_gateway[]": "email",
         "json_format": "1",
     }
     r2 = s.post(f"{BASE}{page}", data=form, timeout=60,
