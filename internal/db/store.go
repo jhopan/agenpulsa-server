@@ -115,11 +115,11 @@ type Order struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
-const orderCols = "id,COALESCE(ref,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
+const orderCols = "id,COALESCE(ref,''),COALESCE(nomor,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
 
 func scanOrder(sc interface{ Scan(...any) error }) (*Order, error) {
 	var o Order
-	err := sc.Scan(&o.ID, &o.Ref, &o.CatalogID, &o.Label, &o.Modal, &o.HargaJual, &o.Status,
+	err := sc.Scan(&o.ID, &o.Ref, &o.Nomor, &o.CatalogID, &o.Label, &o.Modal, &o.HargaJual, &o.Status,
 		&o.OrderIDIsip, &o.Pesan, &o.InvoiceID, &o.Sumber, &o.ChatID, &o.CallbackURL, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
 		return nil, err
