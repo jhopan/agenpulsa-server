@@ -19,9 +19,8 @@ type beliReq struct {
 	Ref       string `json:"ref"`
 }
 
-// beliManual: order dari web admin — ALUR SAMA DENGAN CUSTOMER:
-// pending_payment -> bayar QRIS (paypan) -> webhook paid -> buy.
-// Tidak ada jalur langsung-buy tanpa bayar.
+// beliManual: order dari web admin — LANGSUNG BUY (queued), pakai deposit isipulsa.
+// Hanya USER (bot WA / web publik) yang lewat QRIS paypan (pending_payment -> bayar).
 func (a *API) beliManual(w http.ResponseWriter, r *http.Request) {
 	var req beliReq
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
@@ -43,14 +42,6 @@ func (a *API) beliManual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Buat invoice QRIS paypan (harga = harga_jual katalog).
-	inv, err := a.ppClient.CreateInvoice(it.HargaJual, it.Label+" "+nomor)
-	if err != nil {
-		jsonErr(w, 502, "gagal buat invoice paypan: "+err.Error())
-		return
-	}
-
-	// 2. Simpan order pending_payment + invoice_id.
 	o := &db.Order{
 		Ref:       req.Ref,
 		Nomor:     nomor,
@@ -58,8 +49,7 @@ func (a *API) beliManual(w http.ResponseWriter, r *http.Request) {
 		Label:     it.Label,
 		Modal:     it.HargaMax,
 		HargaJual: it.HargaJual,
-		Status:    "pending_payment",
-		InvoiceID: inv.ID,
+		Status:    "queued",
 		Sumber:    "admin",
 	}
 	if o.Ref == "" {
@@ -70,14 +60,9 @@ func (a *API) beliManual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 202, map[string]any{
-		"ref":        o.Ref,
-		"status":     "pending_payment",
-		"invoice_id": inv.ID,
-		"total":      inv.Total,
-		"pay_url":    inv.PayURL,
-		"qr_url":     inv.QRURL,
-		"expires_at": inv.ExpiresAt,
-		"pesan":      "bayar QRIS total " + strconv.FormatInt(inv.Total, 10) + " (kode unik " + strconv.FormatInt(inv.Code, 10) + ") — order jalan otomatis setelah paid",
+		"ref":    o.Ref,
+		"status": "queued",
+		"pesan":  "order masuk queue — dibeli via saldo isipulsa",
 	})
 }
 

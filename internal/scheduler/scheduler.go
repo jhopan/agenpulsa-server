@@ -118,6 +118,12 @@ func (s *Scheduler) fire(sc *db.Schedule, now time.Time) {
 		Sumber:    "scheduler",
 		ChatID:    sc.ChatID,
 	}
+	// isi modal/harga dari katalog biar laporan (modal/omzet/profit) gak Rp 0.
+	if it, err := s.store.GetCatalog(sc.CatalogID); err == nil {
+		o.Label = it.Label
+		o.Modal = it.HargaMax
+		o.HargaJual = it.HargaJual
+	}
 	if o.Ref == "" {
 		return
 	}

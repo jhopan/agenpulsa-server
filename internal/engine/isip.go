@@ -48,12 +48,15 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 	cmd := exec.Command(py, full...)
 	outBytes, err := cmd.Output()
 	if err != nil {
-		// helper exit != 0 saat gagal; stderr berisi traceback, stdout berisi JSON
+		// helper exit 1 saat gagal, tapi stdout tetap JSON yang valid — parse itu.
+		var res isipResult
+		if len(outBytes) > 0 && json.Unmarshal(outBytes, &res) == nil {
+			log.Printf("[ISIP %v] ok=%v login=%v saldo=%q pesan=%q", args, res.OK, res.Login, res.Saldo, res.Pesan)
+			return &res, nil
+		}
+		// bukan JSON: traceback/kena kill — lempar error asli.
 		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
 			log.Printf("[ISIP %v] stderr: %s", args, strings.TrimSpace(string(ee.Stderr)))
-		}
-		if len(outBytes) > 0 {
-			return nil, fmt.Errorf("isip_api: %s", strings.TrimSpace(string(outBytes)))
 		}
 		return nil, fmt.Errorf("isip_api %v: %w", args, err)
 	}
