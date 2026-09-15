@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strconv"
 )
 
 type paypanOrder struct {
@@ -78,21 +77,6 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Order langganan: paid -> buat jadwal sekali-jalan (BUKAN order langsung).
-	if o.Sumber == "langganan" {
-		if err := a.langgananAktifkan(o); err != nil {
-			_ = a.store.UpdateOrderStatus(o.ID, "pending_payment",
-				"paid tapi gagal buat jadwal: "+err.Error()+" - butuh cek manual", "")
-			jsonErr(w, 500, "gagal aktifkan jadwal, order tetap pending")
-			return
-		}
-		writeJSON(w, 200, map[string]bool{"ok": true, "jadwal_dibuat": true})
-		return
-	}
-
-	// Order manual biasa: paid -> masuk queue, worker eksekusi.
-	_ = a.store.UpdateOrderStatus(o.ID, "queued",
-		"pembayaran diterima (paypan invoice "+ev.Order.ID+", total "+strconv.FormatInt(ev.Order.Total, 10)+")", "")
-	a.eng.Wake()
+	a.terimaPembayaran(o, ev.Order.Total)
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }

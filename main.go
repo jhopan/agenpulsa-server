@@ -45,6 +45,7 @@ func main() {
 	go sched.Run()
 
 	h := api.New(store, eng, webFS)
+	h.StartReconcile() // poll paypan: order paid/expired gak nyangkut walau webhook hilang
 	log.Printf("agenpulsa-server jalan di :%s (WIB %s)", port, sched.NowWIB().Format("2006-01-02 15:04"))
 	log.Fatal(http.ListenAndServe(":"+port, h.Routes()))
 }

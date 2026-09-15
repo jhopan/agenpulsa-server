@@ -41,6 +41,68 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 	return &API{store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg)}
 }
 
+// StartReconcile jalankan loop rekonsiliasi order pending_payment (goroutine).
+// Webhook bisa hilang (firewall/retry habis) — polling ke Paypan jamin order
+// gak nyangkut: paid -> proses, expired -> failed.
+func (a *API) StartReconcile() {
+	if !a.ppCfg.Enabled() {
+		return
+	}
+	go func() {
+		for {
+			a.reconcileOnce()
+			time.Sleep(60 * time.Second)
+		}
+	}()
+}
+
+const pendingGrace = 7 * time.Minute // invoice expired 5 menit + buffer webhook retry
+
+func (a *API) reconcileOnce() {
+	pending, err := a.store.ListOrders("pending_payment", 200)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-pendingGrace)
+	for _, o := range pending {
+		if o.CreatedAt == "" {
+			continue
+		}
+		created, err := time.ParseInLocation("2006-01-02 15:04:05", o.CreatedAt, db.WIBLoc())
+		if err != nil || created.After(cutoff) {
+			continue // masih dalam masa bayar/webhook retry
+		}
+		inv, err := a.ppClient.GetInvoice(o.InvoiceID)
+		if err != nil {
+			continue // paypan gak bisa dihubungi — coba lagi tick berikutnya
+		}
+		switch inv.Status {
+		case "paid":
+			a.terimaPembayaran(o, inv.Total)
+		case "expired":
+			_ = a.store.UpdateOrderStatus(o.ID, "failed",
+				"invoice expired (tidak dibayar dalam 5 menit) — silakan buat order baru", "")
+		default: // pending: biarkan, mungkin webhook tertunda; cek lagi nanti
+		}
+	}
+}
+
+// terimaPembayaran proses order yang dibayar (dari webhook ATAU reconcile).
+// Langganan -> buat jadwal sekali-jalan; lainnya -> queue untuk dibeli.
+func (a *API) terimaPembayaran(o *db.Order, total int64) {
+	if o.Sumber == "langganan" {
+		if err := a.langgananAktifkan(o); err != nil {
+			_ = a.store.UpdateOrderStatus(o.ID, "pending_payment",
+				"paid tapi gagal buat jadwal: "+err.Error()+" - butuh cek manual", "")
+			return
+		}
+		return
+	}
+	_ = a.store.UpdateOrderStatus(o.ID, "queued",
+		"pembayaran diterima (paypan invoice "+o.InvoiceID+", total "+strconv.FormatInt(total, 10)+")", "")
+	a.eng.Wake()
+}
+
 func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 
