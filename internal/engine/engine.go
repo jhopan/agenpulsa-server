@@ -62,6 +62,9 @@ type Engine struct {
 	closed    bool
 	loginOpen bool          // sesi login (window/VNC) sedang berjalan
 	sess      *LoginSession // sesi login aktif, nil kalau tidak ada
+	// Notifier dipanggil tiap order status final (success/failed/cancelled) —
+	// di-set oleh api (TgNotify). Nil = silent.
+	Notifier func(order db.Order, status, pesan string)
 }
 
 func New(store *db.Store) (*Engine, error) {
@@ -231,7 +234,21 @@ func (e *Engine) Execute(o *db.Order) {
 	}
 	_ = e.store.UpdateOrderStatus(o.ID, status, pesan, orderID)
 	e.Callback(o, status, pesan)
+	e.notifyOrder(*o, status, pesan)
 	_ = modal
+}
+
+// notifyOrder push hasil order ke Notifier (Telegram) kalau terpasang.
+// Hanya order BERBAYAR (sumber api/paypan/langganan — bukan scheduler admin
+// harian) supaya jadwal gagal berulang gak banjir chat.
+func (e *Engine) notifyOrder(o db.Order, status, pesan string) {
+	if e.Notifier == nil {
+		return
+	}
+	if o.Sumber == "scheduler" {
+		return // jadwal admin — silent (bisa dicek web admin)
+	}
+	e.Notifier(o, status, pesan)
 }
 
 // Callback kirim hasil ke callback_url order (jika ada), best effort.

@@ -39,7 +39,37 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 	if cfg.Secret == "" {
 		cfg.Secret = strings.TrimSpace(store.GetSetting("paypan_secret", ""))
 	}
-	return &API{store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg)}
+	a := &API{store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg)}
+	// notif hasil order berbayar -> Telegram admin (kalau bot dikonfigurasi).
+	eng.Notifier = func(o db.Order, status, pesan string) {
+		a.TgNotify(formatOrderNotif(&o, status, pesan))
+	}
+	return a
+}
+
+// formatOrderNotif pesan Telegram utk hasil order berbayar.
+func formatOrderNotif(o *db.Order, status, pesan string) string {
+	emoji := map[string]string{
+		"success": "✅", "failed": "❌", "cancelled": "🚫", "scheduled": "📅",
+	}[status]
+	nomor := o.Nomor
+	if nomor == "" {
+		nomor = "-"
+	}
+	msg := fmt.Sprintf(
+		"%s *Order %s*\n\n📦 %s\n📱 %s\n💵 Harga: %s\n🔖 Ref: `%s`",
+		emoji, strings.ToUpper(status), o.Label, nomor,
+		"Rp "+strconv.FormatInt(o.HargaJual, 10), o.Ref,
+	)
+	if o.HargaJual > 0 && o.Modal > 0 && status == "success" {
+		msg += fmt.Sprintf("\n💰 Modal: Rp %s · Profit: Rp %s",
+			strconv.FormatInt(o.Modal, 10),
+			strconv.FormatInt(o.HargaJual-o.Modal, 10))
+	}
+	if pesan != "" {
+		msg += "\n\n" + pesan
+	}
+	return msg
 }
 
 // StartReconcile jalankan loop rekonsiliasi order pending_payment (goroutine).
