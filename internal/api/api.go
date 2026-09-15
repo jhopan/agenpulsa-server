@@ -131,8 +131,7 @@ func (a *API) cookieReminderTick() {
 		hari)
 	log.Printf("[COOKIE REMINDER] %s", pesan)
 	_ = a.store.SetSetting("cookie_notif_sent", hariIni)
-	// notifikasi ke admin dikirim oleh bot Telegram (polling status server) —
-	// server ini gak push langsung.
+	a.TgNotify("🍪 *Reminder Cookies*\n\n" + pesan)
 }
 
 // cookieStatus status reminder cookies untuk bot Telegram (poll).
@@ -190,6 +189,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/report", a.auth(false, a.report))
 	mux.HandleFunc("GET /api/v1/maintenance", a.auth(false, a.maintenance))
 	mux.HandleFunc("GET /api/v1/cookie-status", a.auth(false, a.cookieStatus)) // bot TG poll
+	mux.HandleFunc("POST /api/v1/tes-bot", a.auth(true, a.tesBot))            // tes notif (admin)
 
 	// Akun isipulsa + pengaturan (admin via session/API key, gate di handler).
 	mux.HandleFunc("GET /api/v1/account", a.auth(false, a.account))

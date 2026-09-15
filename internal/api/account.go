@@ -156,6 +156,8 @@ var settingKeys = map[string]bool{
 	"admin_pass":        true,
 	"isipulsa_username": true,
 	"server_url":        true, // URL publik server, dipakai client & callback paypan
+	"bot_tg_token":      true, // token bot Telegram — server kirim notif via Bot API
+	"bot_admin_id":      true, // user ID Telegram penerima notif (mis. 123456789)
 }
 
 // tambahKey: buat/upsert API key client (admin only).
@@ -233,13 +235,19 @@ func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, keys)
 }
 
-// getSettings: baca settings terpilih (admin only).
+// getSettings: baca settings terpilih (admin only). Token bot gak dibalikin —
+// cukup flag bot_tg_token_set biar UI tahu sudah pernah diset.
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 	out := map[string]string{}
 	for k := range settingKeys {
 		out[k] = a.store.GetSetting(k, "")
 	}
 	out["profile_dir"] = a.eng.ProfileDir()
+	if tok := out["bot_tg_token"]; tok != "" {
+		out["bot_tg_token"] = "" // jangan bocorkan
+		out["bot_tg_token_set"] = "1"
+	}
+	delete(out, "bot_tg_token")
 	writeJSON(w, 200, out)
 }
 

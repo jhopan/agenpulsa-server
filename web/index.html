@@ -279,6 +279,17 @@ small{color:#667085}
 </div>
 </div>
 <div class="card">
+<h2>Bot & Notifikasi (Telegram)</h2>
+<p><small>Server kirim notif (reminder cookies dll) langsung ke kamu via Bot API. Token dari @BotFather. ID kamu dari @userinfobot. Setelah simpan, kirim /start ke bot sekali biar Telegram kenal, lalu klik Tes Notif.</small></p>
+<div class="grid2">
+<div><label>Bot token (@BotFather)</label><input id="sBotToken" style="width:100%" placeholder="1234567890:AAxxxx..."></div>
+<div><label>ID Telegram admin (penerima notif)</label><input id="sBotAdmin" style="width:100%" placeholder="123456789"></div>
+</div>
+<div class="btnrow">
+<button class="sec" onclick="tesBot()">🔔 Tes Notif</button>
+</div>
+</div>
+<div class="card">
 <h2>API Key client (bot WA / Telegram)</h2>
 <p><small>Key dipakai client via header <code>X-API-Key</code>. Boleh order = bisa buat order; Admin = bisa kelola katalog juga.</small></p>
 <table id="apikeys">
@@ -568,6 +579,10 @@ async function loadSet(){
     $('sUrl').value=s.server_url||'';
     $('sProfile').value=s.profile_dir||'';
     $('setNama').value=s.isipulsa_username||'';
+    $('sBotAdmin').value=s.bot_admin_id||'';
+    // token gak dibalikin (sensitif) — placeholder saja kalau sudah diset
+    $('sBotToken').value='';
+    $('sBotToken').placeholder=s.bot_tg_token_set?'(tersimpan — kosongkan biar gak diubah)':'1234567890:AAxxxx...';
     const ks=await api('/api/v1/keys').catch(()=>[]);
     const tb=document.querySelector('#apikeys tbody');tb.innerHTML='';
     if(!(ks||[]).length){tb.innerHTML='<tr><td colspan="5" class="empty">Belum ada API key</td></tr>';}
@@ -597,9 +612,18 @@ async function simpanSet(){
     if($('sPass').value)body.admin_pass=$('sPass').value;
     if($('sPaypan').value.trim())body.paypan_secret=$('sPaypan').value.trim();
     if($('sUrl').value.trim())body.server_url=$('sUrl').value.trim().replace(/\/+$/,'');
+    if($('sBotToken').value.trim())body.bot_tg_token=$('sBotToken').value.trim();
+    if($('sBotAdmin').value.trim())body.bot_admin_id=$('sBotAdmin').value.trim();
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
     flash('Disimpan: '+(r.changed||[]).join(', '));
-    $('sPass').value='';
+    $('sPass').value='';$('sBotToken').value='';
+    loadSet();
+  }catch(e){flash(e.message,1)}
+}
+async function tesBot(){
+  try{
+    await api('/api/v1/tes-bot',{method:'POST'});
+    flash('✅ Pesan tes terkirim — cek Telegram kamu');
   }catch(e){flash(e.message,1)}
 }
 $('logout').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/'};
