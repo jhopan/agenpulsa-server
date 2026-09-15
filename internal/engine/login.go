@@ -18,6 +18,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/launcher/flags"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/jhopan/agenpulsa-server/internal/db"
 )
 
 const (
@@ -321,6 +322,8 @@ func (e *Engine) ImportCookies(raw string) (int, error) {
 		return 0, err
 	}
 	log.Printf("[LOGIN] %d cookie diinject ke profile", len(cookies))
+	// catat waktu inject — dasar reminder "inject cookies baru tiap 3 hari".
+	_ = e.store.SetSetting("cookies_updated_at", db.NowWIB().Format("2006-01-02 15:04:05"))
 	return len(cookies), nil
 }
 

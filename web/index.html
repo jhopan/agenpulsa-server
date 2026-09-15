@@ -108,8 +108,10 @@ small{color:#667085}
 <div class="kv"><span>Status login</span><b id="akLogin">-</b></div>
 <div class="kv"><span>Nama akun</span><b id="akNama">-</b></div>
 <div class="kv"><span>Saldo</span><b id="akSaldo">-</b></div>
+<div class="kv"><span>Umur cookies</span><b id="akCookie">-</b></div>
 <div class="kv"><span>Folder profile</span><b id="akProfile" style="font-size:12px">-</b></div>
 <div id="akMasalah" style="display:none;color:#b42318;background:#fee4e2;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px"></div>
+<div id="akCookieWarn" style="display:none;color:#8a6d00;background:#fff3cd;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px"></div>
 <div class="btnrow">
 <button id="btnCek" onclick="cekAkun()">↻ Cek Status</button>
 <button id="btnGanti" class="del" onclick="hapusAkun()">🗑 Hapus Akun (profil + cookies)</button>
@@ -508,6 +510,14 @@ async function cekAkun(){
     $('akNama').textContent=a.nama||a.username||'-';
     $('akSaldo').textContent=a.saldo;
     $('akProfile').textContent=a.profile;
+    // umur cookies + reminder (>= 3 hari)
+    const ck=$('akCookie'), warn=$('akCookieWarn');
+    if(a.cookie_umur_jam<0){ck.textContent='belum inject / reset'}
+    else{ck.textContent=(a.cookie_umur_jam/24).toFixed(1)+' hari'}
+    if(a.cookie_reminder){
+      warn.textContent='⚠️ Cookies sudah '+Math.floor(a.cookie_umur_jam/24)+' hari. Sesi isipulsa bisa mati mendadak — inject cookies baru (export Cookie-Editor → kolom di bawah).';
+      warn.style.display='block';
+    } else warn.style.display='none';
     const m=$('akMasalah');
     if(a.login){flash('Login isipulsa AKTIF — saldo '+a.saldo)}
     if(a.masalah){m.textContent=a.masalah;m.style.display='block'}else m.style.display='none';

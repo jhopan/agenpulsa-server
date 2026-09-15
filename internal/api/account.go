@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
@@ -22,15 +23,37 @@ type akunStatus struct {
 	Profile  string `json:"profile"`
 	Username string `json:"username"`
 	WinOpen  bool   `json:"window_login_open"`
+	// umur cookies sejak inject terakhir + flag reminder (>= 3 hari).
+	CookieUmurJam  float64 `json:"cookie_umur_jam"`
+	CookieReminder bool    `json:"cookie_reminder"`
+}
+
+const cookieReminderJam = 72.0 // 3 hari
+
+// cookieUmurJam hitung umur cookies dari settings.cookies_updated_at.
+// Return -1 kalau belum pernah inject / sudah direset.
+func (a *API) cookieUmurJam() float64 {
+	raw := a.store.GetSetting("cookies_updated_at", "")
+	if raw == "" {
+		return -1
+	}
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", raw, db.WIBLoc())
+	if err != nil {
+		return -1
+	}
+	return db.NowWIB().Sub(t).Hours()
 }
 
 // account: status login isipulsa + info akun.
 func (a *API) account(w http.ResponseWriter, r *http.Request) {
+	umur := a.cookieUmurJam()
 	st := akunStatus{
-		Saldo:    "-",
-		Profile:  a.eng.ProfileDir(),
-		Username: a.store.GetSetting("isipulsa_username", "-"),
-		WinOpen:  a.eng.LoginOpen(),
+		Saldo:          "-",
+		Profile:        a.eng.ProfileDir(),
+		Username:       a.store.GetSetting("isipulsa_username", "-"),
+		WinOpen:        a.eng.LoginOpen(),
+		CookieUmurJam:  umur,
+		CookieReminder: umur >= cookieReminderJam,
 	}
 	ok, saldo := a.eng.CekStatus()
 	st.Login = ok
@@ -54,6 +77,7 @@ func (a *API) gantiAkun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = a.store.SetSetting("isipulsa_username", "-")
+	_ = a.store.SetSetting("cookies_updated_at", "") // hapus profile = cookies hilang
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
@@ -132,6 +156,7 @@ var settingKeys = map[string]bool{
 	"admin_pass":        true,
 	"isipulsa_username": true,
 	"server_url":        true, // URL publik server, dipakai client & callback paypan
+	"ntfy_url":          true, // topic ntfy admin — dipakai reminder cookies (opsional)
 }
 
 // tambahKey: buat/upsert API key client (admin only).

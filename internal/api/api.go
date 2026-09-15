@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,6 +102,48 @@ func (a *API) terimaPembayaran(o *db.Order, total int64) {
 	_ = a.store.UpdateOrderStatus(o.ID, "queued",
 		"pembayaran diterima (paypan invoice "+o.InvoiceID+", total "+strconv.FormatInt(total, 10)+")", "")
 	a.eng.Wake()
+}
+
+// StartCookieReminder loop per 30 menit: kalau umur cookies >= 3 hari, kirim
+// peringatan (log + ntfy kalau settings.ntfy_url diset) MAKS 1x per hari —
+// key notif = tanggal WIB. Reset otomatis saat inject cookies baru.
+func (a *API) StartCookieReminder() {
+	go func() {
+		for {
+			a.cookieReminderTick()
+			time.Sleep(30 * time.Minute)
+		}
+	}()
+}
+
+func (a *API) cookieReminderTick() {
+	umur := a.cookieUmurJam()
+	if umur < cookieReminderJam {
+		return
+	}
+	hari := int(umur / 24)
+	hariIni := db.NowWIB().Format("2006-01-02")
+	if a.store.GetSetting("cookie_notif_sent", "") == hariIni {
+		return // sudah dikirim hari ini — jangan spam
+	}
+	pesan := fmt.Sprintf(
+		"Cookies isipulsa sudah %d hari (umur >= 3 hari). Inject cookies baru di web admin -> Akun Login supaya sesi gak mati mendadak.",
+		hari)
+	log.Printf("[COOKIE REMINDER] %s", pesan)
+	_ = a.store.SetSetting("cookie_notif_sent", hariIni)
+	if url := strings.TrimRight(a.store.GetSetting("ntfy_url", ""), "/"); url != "" {
+		body := strings.NewReader(pesan)
+		req, err := http.NewRequest("POST", url, body)
+		if err == nil {
+			req.Header.Set("Title", "AgenPulsa: cookies perlu diperbarui")
+			req.Header.Set("Priority", "high")
+			req.Header.Set("Tags", "warning,cookie")
+			client := &http.Client{Timeout: 10 * time.Second}
+			if resp, err := client.Do(req); err == nil {
+				_ = resp.Body.Close()
+			}
+		}
+	}
 }
 
 func (a *API) Routes() http.Handler {
