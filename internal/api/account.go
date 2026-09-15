@@ -158,6 +158,7 @@ var settingKeys = map[string]bool{
 	"server_url":        true, // URL publik server, dipakai client & callback paypan
 	"bot_tg_token":      true, // token bot Telegram — server kirim notif via Bot API
 	"bot_admin_id":      true, // user ID Telegram penerima notif (mis. 123456789)
+	"saldo_min":         true, // ambang alert saldo isipulsa (default 20000)
 }
 
 // tambahKey: buat/upsert API key client (admin only).
