@@ -135,6 +135,31 @@ func (a *API) cookieReminderTick() {
 	// server ini gak push langsung.
 }
 
+// cookieStatus status reminder cookies untuk bot Telegram (poll).
+func (a *API) cookieStatus(w http.ResponseWriter, r *http.Request) {
+	umur := a.cookieUmurJam()
+	sudahKirim := a.store.GetSetting("cookie_notif_sent", "") == db.NowWIB().Format("2006-01-02")
+	writeJSON(w, 200, map[string]any{
+		"umur_jam":               umur,
+		"umur_hari":              int(umur / 24),
+		"reminder":               umur >= cookieReminderJam,
+		"sudah_dikirim_hari_ini": sudahKirim,
+		"pesan":                  cookiePesan(umur),
+	})
+}
+
+func cookiePesan(umur float64) string {
+	if umur < 0 {
+		return "Belum ada cookies tercatat — inject cookies di web admin -> Akun Login."
+	}
+	hari := int(umur / 24)
+	if umur >= cookieReminderJam {
+		return fmt.Sprintf("⚠️ Cookies isipulsa sudah %d hari (>= 3 hari). Inject cookies baru SEKARANG di web admin -> Akun Login sebelum sesi mati mendadak.", hari)
+	}
+	sisa := int(cookieReminderJam-umur) / 24
+	return fmt.Sprintf("Cookies isipulsa %d hari. Sisa %d hari sebelum perlu inject baru.", hari, sisa+1)
+}
+
 func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 
@@ -164,6 +189,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/status", a.auth(false, a.status))
 	mux.HandleFunc("GET /api/v1/report", a.auth(false, a.report))
 	mux.HandleFunc("GET /api/v1/maintenance", a.auth(false, a.maintenance))
+	mux.HandleFunc("GET /api/v1/cookie-status", a.auth(false, a.cookieStatus)) // bot TG poll
 
 	// Akun isipulsa + pengaturan (admin via session/API key, gate di handler).
 	mux.HandleFunc("GET /api/v1/account", a.auth(false, a.account))
