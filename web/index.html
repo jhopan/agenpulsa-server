@@ -279,11 +279,15 @@ small{color:#667085}
 </div>
 </div>
 <div class="card">
-<h2>Bot & Notifikasi (Telegram)</h2>
-<p><small>Server kirim notif (reminder cookies dll) langsung ke kamu via Bot API. Token dari @BotFather. ID kamu dari @userinfobot. Setelah simpan, kirim /start ke bot sekali biar Telegram kenal, lalu klik Tes Notif.</small></p>
+<h2>Bot &amp; Notifikasi (Telegram)</h2>
+<p><small>Server kirim notif (reminder cookies, saldo menipis, hasil order) langsung ke kamu via Bot API. Token dari @BotFather. ID kamu dari @userinfobot. Setelah simpan, kirim /start ke bot sekali biar Telegram kenal, lalu klik Tes Notif.</small></p>
 <div class="grid2">
 <div><label>Bot token (@BotFather)</label><input id="sBotToken" style="width:100%" placeholder="1234567890:AAxxxx..."></div>
 <div><label>ID Telegram admin (penerima notif)</label><input id="sBotAdmin" style="width:100%" placeholder="123456789"></div>
+</div>
+<div class="grid2">
+<div><label>Ambang alert saldo (Rp)</label><input id="sSaldoMin" type="number" min="0" step="1000" style="width:100%" placeholder="20000"></div>
+<div></div>
 </div>
 <div class="btnrow">
 <button class="sec" onclick="tesBot()">🔔 Tes Notif</button>
@@ -580,6 +584,7 @@ async function loadSet(){
     $('sProfile').value=s.profile_dir||'';
     $('setNama').value=s.isipulsa_username||'';
     $('sBotAdmin').value=s.bot_admin_id||'';
+    $('sSaldoMin').value=s.saldo_min||'20000';
     // token gak dibalikin (sensitif) — placeholder saja kalau sudah diset
     $('sBotToken').value='';
     $('sBotToken').placeholder=s.bot_tg_token_set?'(tersimpan — kosongkan biar gak diubah)':'1234567890:AAxxxx...';
@@ -614,6 +619,7 @@ async function simpanSet(){
     if($('sUrl').value.trim())body.server_url=$('sUrl').value.trim().replace(/\/+$/,'');
     if($('sBotToken').value.trim())body.bot_tg_token=$('sBotToken').value.trim();
     if($('sBotAdmin').value.trim())body.bot_admin_id=$('sBotAdmin').value.trim();
+    if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
     flash('Disimpan: '+(r.changed||[]).join(', '));
     $('sPass').value='';$('sBotToken').value='';
