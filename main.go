@@ -46,7 +46,7 @@ func main() {
 
 	h := api.New(store, eng, webFS)
 	h.StartReconcile() // poll paypan: order paid/expired gak nyangkut walau webhook hilang
-	h.StartCookieReminder() // notif inject cookies baru tiap 3 hari (log + ntfy opsional)
+	h.StartCookieReminder() // reminder cookies 3 hari (log); bot TG yang notifkan admin
 	log.Printf("agenpulsa-server jalan di :%s (WIB %s)", port, sched.NowWIB().Format("2006-01-02 15:04"))
 	log.Fatal(http.ListenAndServe(":"+port, h.Routes()))
 }

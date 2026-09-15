@@ -156,7 +156,6 @@ var settingKeys = map[string]bool{
 	"admin_pass":        true,
 	"isipulsa_username": true,
 	"server_url":        true, // URL publik server, dipakai client & callback paypan
-	"ntfy_url":          true, // topic ntfy admin — dipakai reminder cookies (opsional)
 }
 
 // tambahKey: buat/upsert API key client (admin only).

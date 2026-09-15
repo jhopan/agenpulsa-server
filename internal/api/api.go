@@ -104,9 +104,9 @@ func (a *API) terimaPembayaran(o *db.Order, total int64) {
 	a.eng.Wake()
 }
 
-// StartCookieReminder loop per 30 menit: kalau umur cookies >= 3 hari, kirim
-// peringatan (log + ntfy kalau settings.ntfy_url diset) MAKS 1x per hari —
-// key notif = tanggal WIB. Reset otomatis saat inject cookies baru.
+// StartCookieReminder loop per 30 menit: kalau umur cookies >= 3 hari, catat
+// peringatan (log) MAKS 1x per hari — key notif = tanggal WIB. Bot Telegram
+// yang baca & kirim notif ke admin. Reset otomatis saat inject cookies baru.
 func (a *API) StartCookieReminder() {
 	go func() {
 		for {
@@ -131,19 +131,8 @@ func (a *API) cookieReminderTick() {
 		hari)
 	log.Printf("[COOKIE REMINDER] %s", pesan)
 	_ = a.store.SetSetting("cookie_notif_sent", hariIni)
-	if url := strings.TrimRight(a.store.GetSetting("ntfy_url", ""), "/"); url != "" {
-		body := strings.NewReader(pesan)
-		req, err := http.NewRequest("POST", url, body)
-		if err == nil {
-			req.Header.Set("Title", "AgenPulsa: cookies perlu diperbarui")
-			req.Header.Set("Priority", "high")
-			req.Header.Set("Tags", "warning,cookie")
-			client := &http.Client{Timeout: 10 * time.Second}
-			if resp, err := client.Do(req); err == nil {
-				_ = resp.Body.Close()
-			}
-		}
-	}
+	// notifikasi ke admin dikirim oleh bot Telegram (polling status server) —
+	// server ini gak push langsung.
 }
 
 func (a *API) Routes() http.Handler {
