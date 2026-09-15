@@ -389,13 +389,34 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, err.Error())
 		return
 	}
+	// Buat invoice QRIS paypan (sama dengan langgananBaru) — tanpa ini order
+	// pending_payment gak pernah punya invoice_id -> webhook/reconcile gak bisa match.
+	if o.HargaJual < 1000 {
+		jsonErr(w, 400, "harga katalog di luar batas paypan (min 1.000)")
+		return
+	}
+	inv, err := a.ppClient.CreateInvoice(o.HargaJual, o.Label+" "+o.Nomor)
+	if err != nil {
+		jsonErr(w, 502, "gagal buat invoice paypan: "+err.Error())
+		return
+	}
+	o.InvoiceID = inv.ID
 	o.Status = "pending_payment"
 	if err := a.eng.Enqueue(o); err != nil { // simpan row (status pending, worker skip)
 		jsonErr(w, 500, err.Error())
 		return
 	}
 	fresh, _ := a.store.GetOrderByRef(o.Ref)
-	writeJSON(w, 202, fresh)
+	writeJSON(w, 202, map[string]any{
+		"ref":        fresh.Ref,
+		"status":     fresh.Status,
+		"invoice_id": inv.ID,
+		"total":      inv.Total,
+		"pay_url":    inv.PayURL,
+		"qr_url":     inv.QRURL,
+		"expires_at": inv.ExpiresAt,
+		"pesan":      "bayar QRIS total " + strconv.FormatInt(inv.Total, 10) + " — order jalan otomatis setelah paid",
+	})
 }
 
 func (a *API) getOrder(w http.ResponseWriter, r *http.Request) {
