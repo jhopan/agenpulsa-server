@@ -32,17 +32,31 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 RE_NONDIGIT = re.compile(r"[^\d]")
 
 # Prefix nomor Indonesia -> nama operator (dipakai guard operator sebelum order).
+# Kelengkapan: seluruh prefix Seluler Indonesia (Telkomsel, XL, Axis, Indosat
+# Ooredoo+H3I, Three, Smartfren, By.U, dan blok lama).
 PREFIX_OPERATOR = [
+    # Telkomsel (simPATI, Kartu As, Halo, By.U juga di 62851/6285x sebagian)
     ("62811", "Telkomsel"), ("62812", "Telkomsel"), ("62813", "Telkomsel"),
     ("62821", "Telkomsel"), ("62822", "Telkomsel"), ("62823", "Telkomsel"),
     ("62852", "Telkomsel"), ("62853", "Telkomsel"),
-    ("62851", "XL"), ("62877", "XL"), ("62878", "XL"),
+    # XL Axiata (XLSmart)
     ("62817", "XL"), ("62818", "XL"), ("62819", "XL"), ("62859", "XL"),
-    ("62895", "Three"), ("62896", "Three"), ("62897", "Three"), ("62898", "Three"), ("62899", "Three"),
-    ("62831", "Indosat"), ("62832", "Indosat"), ("62833", "Indosat"), ("62838", "Indosat"),
+    ("62877", "XL"), ("62878", "XL"), ("62851", "XL"),
+    # Axis (jaringan XL)
+    ("62831", "Axis"), ("62832", "Axis"), ("62833", "Axis"), ("62838", "Axis"),
+    # Indosat Ooredoo (IM3 + Ooredoo)
     ("62814", "Indosat"), ("62815", "Indosat"), ("62816", "Indosat"),
     ("62855", "Indosat"), ("62856", "Indosat"), ("62857", "Indosat"), ("62858", "Indosat"),
-    ("62888", "Smartfren"), ("62889", "Smartfren"), ("62881", "Smartfren"), ("62882", "Smartfren"), ("62883", "Smartfren"),
+    # Three (H3I)
+    ("62895", "Three"), ("62896", "Three"), ("62897", "Three"), ("62898", "Three"), ("62899", "Three"),
+    # Smartfren
+    ("62881", "Smartfren"), ("62882", "Smartfren"), ("62883", "Smartfren"),
+    ("62888", "Smartfren"), ("62889", "Smartfren"),
+    # Blok lama (jarang, tapi biar lengkap)
+    ("62861", "Telkom"), ("62864", "Telkom"), ("62865", "Telkom"),   # Telkom Flexi
+    ("62868", "Telkom"),                                              # Telkom
+    ("62827", "Smartfren"),                                           # Smart (Mobile-8/Smartfren lama)
+    ("62829", "Smartfren"),                                           # Fren/Hepi (Smartfren lama)
 ]
 
 
@@ -59,15 +73,32 @@ def detect_operator(nomor: str) -> str:
     return ""
 
 
+# Operator isipulsa yang TIDAK terikat nomor HP (produk non-seluler /
+# voucher fisik) — guard nomor dilewati utk operator2 ini.
+# CATATAN: dicek dgn word-boundary — 'telkomsel' gak boleh kena 'telkom'.
+OPERATOR_NON_NOMOR = (
+    "pln", "bpjs", "garena", "gemscool", "megaxus",
+    "telkom flexi", "pln pasca", "voucher game", "etoll", "e-money",
+    "voucher internet", "token",
+)
+
+
 def operator_matches(nomor: str, operator_nama: str) -> bool:
     """True kalau operator nomor cocok dgn operator paket (fuzzy: Telkomsel
-    cocok dgn 'Telkomsel (Ilmupedia)', XL dgn 'Xl Paket Game', dst)."""
-    op_num = detect_operator(nomor).lower()
-    if not op_num:
-        return True  # nomor gak dikenali -> jangan blokir (biarkan isipulsa validasi)
+    cocok dgn 'Telkomsel (Ilmupedia)', XL dgn 'XL (Xtra Combo)', dst).
+
+    Nomor gak dikenali ATAU katalog tanpa info operator ATAU produk non-seluler
+    (PLN/game/dll) -> True (skip guard).
+    """
     op_paket = (operator_nama or "").lower()
     if not op_paket:
         return True  # katalog gak ada info operator -> skip guard
+    for non in OPERATOR_NON_NOMOR:
+        if non in op_paket:
+            return True  # PLN/game/token dll — gak terikat nomor seluler
+    op_num = detect_operator(nomor).lower()
+    if not op_num:
+        return True  # nomor gak dikenali -> jangan blokir (biarkan isipulsa validasi)
     # 'telkomsel (ilmupedia)' -> 'telkomsel'
     op_paket_base = re.split(r"[\s(/-]", op_paket.strip())[0]
     return op_num == op_paket_base or op_num in op_paket or op_paket_base in op_num
