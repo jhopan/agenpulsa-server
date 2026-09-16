@@ -382,6 +382,7 @@ def main():
     s.add_argument("--produk", default="pulsa")
     s.add_argument("--voucher")
     s.add_argument("--nama-asli", dest="nama_asli", default="")  # nama asli di katalog (anti-drift)
+    s.add_argument("--operator", default="")  # operator paket (guard nomor user)
     s.add_argument("--cari")
     s.add_argument("--harga-max", type=int, default=0)
     s.set_defaults(fn=op_order)

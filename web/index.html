@@ -170,6 +170,7 @@ small{color:#667085}
 <div><label>Produk (tab isipulsa)</label><input id="kTab" style="width:100%" value="Paket Kuota" placeholder="Paket Kuota / Pulsa"></div>
 <div><label>Voucher ID (jangan diubah)</label><input id="kVoucher" style="width:100%" placeholder="misal: 10137"></div>
 <div><label>Nama asli isipulsa (jangan diubah — verifikasi order)</label><input id="kCari" style="width:100%" placeholder="misal: Kuota Ketengan Ilmupedia 22GB, 7 hari"></div>
+<div><label>Provider (operator paket — dari isipulsa, jangan diubah)</label><input id="kOperator" style="width:100%" placeholder="misal: Telkomsel (Ilmupedia)"><div><small style="color:#667085">Dipakai guard: nomor user dicek sebelum order — XL masuk paket Telkomsel = dibatalkan otomatis.</small></div></div>
 <div><label>Harga modal (dari isipulsa)</label><input id="kMax" type="number" style="width:100%" placeholder="13749"></div>
 <div><label>Harga jual</label><input id="kJual" type="number" style="width:100%" placeholder="16000"></div>
 </div>
@@ -477,13 +478,14 @@ async function loadCatalog(){
 function editKatalog(it){
   $('kID').value=it.id;$('kLabel').value=it.label;$('kTab').value=it.tab;
   $('kVoucher').value=it.voucher||'';$('kCari').value=it.cari||'';
+  $('kOperator').value=it.operator||'';
   $('kMax').value=it.harga_max;$('kJual').value=it.harga_jual;
   $('kAktif').checked=!!it.aktif;
   $('kFormJudul').textContent='Edit Katalog #'+it.id;
   $('tab-katalog').scrollIntoView({behavior:'smooth'});
 }
 function resetForm(){
-  ['kID','kLabel','kVoucher','kCari','kMax','kJual'].forEach(i=>$(i).value='');
+  ['kID','kLabel','kVoucher','kCari','kOperator','kMax','kJual'].forEach(i=>$(i).value='');
   $('kTab').value='Paket Kuota';$('kAktif').checked=true;
   $('kFormJudul').textContent='Tambah Katalog';
 }
@@ -509,16 +511,17 @@ function pilihPaket(it){
   $('kTab').value=it.produk==='paket_kuota'?'Paket Kuota':(it.produk==='pulsa'?'Pulsa':it.produk);
   $('kVoucher').value=it.voucher;
   $('kCari').value=it.nama;           // nama asli isipulsa (anti-drift + fallback)
+  $('kOperator').value=it.operator||'';  // provider (guard nomor user)
   $('kMax').value=it.harga;
   $('kJual').value=Math.ceil(it.harga*1.15/100)*100; // saran markup 15%, dibulatkan ke 100
   $('kAktif').checked=true;
   $('kFormJudul').textContent='Tambah Katalog: '+it.nama;
   $('kFormJudul').scrollIntoView({behavior:'smooth'});
-  flash('Paket dipilih — Label boleh diubah (nama jualan), jangan ubah Voucher & Nama asli.');
+  flash('Paket dipilih ('+(it.operator||'provider?')+') — Label boleh diubah, jangan ubah Voucher/Nama asli/Provider.');
 }
 async function simpanKatalog(){
   try{
-    const body={label:$('kLabel').value.trim(),tab:$('kTab').value.trim()||'Paket Kuota',voucher:$('kVoucher').value.trim(),cari:$('kCari').value.trim(),harga_max:+$('kMax').value||0,harga_jual:+$('kJual').value||0,aktif:$('kAktif').checked};
+    const body={label:$('kLabel').value.trim(),tab:$('kTab').value.trim()||'Paket Kuota',voucher:$('kVoucher').value.trim(),cari:$('kCari').value.trim(),operator:$('kOperator').value.trim(),harga_max:+$('kMax').value||0,harga_jual:+$('kJual').value||0,aktif:$('kAktif').checked};
     if(!body.label){flash('Label wajib diisi',1);return}
     const id=+$('kID').value;
     if(id)body.id=id;

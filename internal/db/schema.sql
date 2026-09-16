@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS catalog (
     tab TEXT NOT NULL DEFAULT 'Paket Kuota',
     cari TEXT NOT NULL,
     voucher TEXT,
+    operator TEXT,                          -- provider paket (guard nomor user)
     harga_max INTEGER NOT NULL DEFAULT 0,   -- modal, guard harga naik
     harga_jual INTEGER NOT NULL DEFAULT 0,  -- harga ke pelanggan
     aktif INTEGER NOT NULL DEFAULT 1

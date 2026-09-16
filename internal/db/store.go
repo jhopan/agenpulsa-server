@@ -30,13 +30,14 @@ type CatalogItem struct {
 	Tab       string `json:"tab"`
 	Cari      string `json:"cari"`
 	Voucher   string `json:"voucher"`
+	Operator  string `json:"operator"` // provider paket (guard nomor user)
 	HargaMax  int64  `json:"harga_max"`
 	HargaJual int64  `json:"harga_jual"`
 	Aktif     bool   `json:"aktif"`
 }
 
 func (s *Store) ListCatalog(onlyActive bool) ([]CatalogItem, error) {
-	q := "SELECT id,label,tab,cari,COALESCE(voucher,''),harga_max,harga_jual,aktif FROM catalog"
+	q := "SELECT id,label,tab,cari,COALESCE(voucher,''),COALESCE(operator,''),harga_max,harga_jual,aktif FROM catalog"
 	if onlyActive {
 		q += " WHERE aktif=1"
 	}
@@ -50,7 +51,7 @@ func (s *Store) ListCatalog(onlyActive bool) ([]CatalogItem, error) {
 	for rows.Next() {
 		var it CatalogItem
 		var aktif int
-		if err := rows.Scan(&it.ID, &it.Label, &it.Tab, &it.Cari, &it.Voucher, &it.HargaMax, &it.HargaJual, &aktif); err != nil {
+		if err := rows.Scan(&it.ID, &it.Label, &it.Tab, &it.Cari, &it.Voucher, &it.Operator, &it.HargaMax, &it.HargaJual, &aktif); err != nil {
 			return nil, err
 		}
 		it.Aktif = aktif == 1
@@ -62,8 +63,8 @@ func (s *Store) ListCatalog(onlyActive bool) ([]CatalogItem, error) {
 func (s *Store) GetCatalog(id int64) (*CatalogItem, error) {
 	var it CatalogItem
 	var aktif int
-	err := s.DB.QueryRow("SELECT id,label,tab,cari,COALESCE(voucher,''),harga_max,harga_jual,aktif FROM catalog WHERE id=?", id).
-		Scan(&it.ID, &it.Label, &it.Tab, &it.Cari, &it.Voucher, &it.HargaMax, &it.HargaJual, &aktif)
+	err := s.DB.QueryRow("SELECT id,label,tab,cari,COALESCE(voucher,''),COALESCE(operator,''),harga_max,harga_jual,aktif FROM catalog WHERE id=?", id).
+		Scan(&it.ID, &it.Label, &it.Tab, &it.Cari, &it.Voucher, &it.Operator, &it.HargaMax, &it.HargaJual, &aktif)
 	if err != nil {
 		return nil, err
 	}
@@ -77,12 +78,12 @@ func (s *Store) UpsertCatalog(it *CatalogItem) (int64, error) {
 		aktif = 1
 	}
 	if it.ID > 0 {
-		_, err := s.DB.Exec("UPDATE catalog SET label=?,tab=?,cari=?,voucher=?,harga_max=?,harga_jual=?,aktif=? WHERE id=?",
-			it.Label, it.Tab, it.Cari, it.Voucher, it.HargaMax, it.HargaJual, aktif, it.ID)
+		_, err := s.DB.Exec("UPDATE catalog SET label=?,tab=?,cari=?,voucher=?,operator=?,harga_max=?,harga_jual=?,aktif=? WHERE id=?",
+			it.Label, it.Tab, it.Cari, it.Voucher, it.Operator, it.HargaMax, it.HargaJual, aktif, it.ID)
 		return it.ID, err
 	}
-	r, err := s.DB.Exec("INSERT INTO catalog(label,tab,cari,voucher,harga_max,harga_jual,aktif) VALUES(?,?,?,?,?,?,?)",
-		it.Label, it.Tab, it.Cari, it.Voucher, it.HargaMax, it.HargaJual, aktif)
+	r, err := s.DB.Exec("INSERT INTO catalog(label,tab,cari,voucher,operator,harga_max,harga_jual,aktif) VALUES(?,?,?,?,?,?,?,?)",
+		it.Label, it.Tab, it.Cari, it.Voucher, it.Operator, it.HargaMax, it.HargaJual, aktif)
 	if err != nil {
 		return 0, err
 	}

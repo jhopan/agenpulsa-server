@@ -36,8 +36,9 @@ func Open(path string) (*Store, error) {
 	if _, err := d.Exec(schemaSQL); err != nil {
 		return nil, err
 	}
-	// Migrasi ringan DB lama: kolom invoice_id (paypan).
+	// Migrasi ringan DB lama: kolom invoice_id (paypan), operator (guard provider).
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN invoice_id TEXT")
+	_, _ = d.Exec("ALTER TABLE catalog ADD COLUMN operator TEXT")
 	return &Store{DB: d}, nil
 }
 

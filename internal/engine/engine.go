@@ -270,7 +270,7 @@ func (e *Engine) Callback(o *db.Order, status, pesan string) {
 // runOrder: order via HTTP murni (isip_api.py) — tanpa Chromium/Turnstile.
 // Return (pesan, modal, orderID_isipulsa, sukses).
 func (e *Engine) runOrder(o *db.Order) (string, int64, string, bool) {
-	// Ambil katalog item bila ada (untuk voucher/cari/harga_max/produk).
+	// Ambil katalog item bila ada (untuk voucher/cari/operator/harga_max/produk).
 	item := &db.CatalogItem{Tab: "Paket Kuota", Cari: o.Label}
 	if o.CatalogID > 0 {
 		if it, err := e.store.GetCatalog(o.CatalogID); err == nil {
@@ -283,7 +283,8 @@ func (e *Engine) runOrder(o *db.Order) (string, int64, string, bool) {
 	produk = strings.ReplaceAll(produk, " ", "_")
 
 	// item.Cari = nama asli paket di isipulsa (anti-drift + fallback kalau voucher hilang)
-	sukses, pesan, orderID, modal := e.IsipOrder(o.Nomor, produk, item.Voucher, item.Cari, item.HargaMax)
+	// item.Operator = provider paket (guard: nomor user harus cocok provider)
+	sukses, pesan, orderID, modal := e.IsipOrder(o.Nomor, produk, item.Voucher, item.Cari, item.Operator, item.HargaMax)
 	return pesan, modal, orderID, sukses
 }
 

@@ -100,7 +100,8 @@ func (e *Engine) IsipSearch(tab, cari string, limit int) ([]map[string]string, e
 // IsipOrder order via POST form + csrf (tanpa browser).
 // namaAsli = nama asli paket di isipulsa waktu katalog dibuat (anti-drift:
 // kalau isipulsa rename/hapus paket, order dibatalkan atau fallback by nama).
-func (e *Engine) IsipOrder(nomor, produk, voucher, namaAsli string, hargaMax int64) (sukses bool, pesan string, orderID string, modal int64) {
+// operatorPaket = provider paket katalog (guard: prefix nomor harus cocok).
+func (e *Engine) IsipOrder(nomor, produk, voucher, namaAsli, operatorPaket string, hargaMax int64) (sukses bool, pesan string, orderID string, modal int64) {
 	args := []string{"order", "--profile", e.userData, "--nomor", nomor}
 	if produk != "" {
 		args = append(args, "--produk", produk)
@@ -110,6 +111,9 @@ func (e *Engine) IsipOrder(nomor, produk, voucher, namaAsli string, hargaMax int
 	}
 	if namaAsli != "" {
 		args = append(args, "--nama-asli", namaAsli)
+	}
+	if operatorPaket != "" {
+		args = append(args, "--operator", operatorPaket)
 	}
 	if hargaMax > 0 {
 		args = append(args, "--harga-max", fmt.Sprint(hargaMax))
