@@ -502,8 +502,18 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getOrder(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	o, err := a.store.GetOrder(id)
+	id, idStr := r.PathValue("id"), r.PathValue("id")
+	if num, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+		o, err := a.store.GetOrder(num)
+		if err != nil {
+			jsonErr(w, 404, "order tidak ada")
+			return
+		}
+		writeJSON(w, 200, o)
+		return
+	}
+	// bukan angka = ref (mis. f10f3762d4ae459a dari bot telegram)
+	o, err := a.store.GetOrderByRef(id)
 	if err != nil {
 		jsonErr(w, 404, "order tidak ada")
 		return
