@@ -51,14 +51,19 @@ def out(ok=False, **kw):
 
 
 def chromium_cookies(profile):
-    """Baca cookies isipulsa dari profil Chromium (decrypt via playwright context)."""
+    """Baca cookies isipulsa dari profil Chromium via playwright context.
+
+    Playwright yang decrypt (key dari profile sendiri) — tanpa playwright ini
+    gak jalan di debian (cookie value terenkripsi v10).
+    """
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(profile, headless=True)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        cookies = ctx.cookies(BASE)
-        ctx.close()
+        try:
+            cookies = ctx.cookies([BASE])
+        finally:
+            ctx.close()
     return cookies
 
 
