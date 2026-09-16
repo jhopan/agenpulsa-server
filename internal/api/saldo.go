@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jhopan/agenpulsa-server/internal/db"
 )
 
 const saldoMinDefault = 20000 // Rp
@@ -75,20 +77,39 @@ func (a *API) saldoTick() {
 	sudahAlert := a.store.GetSetting("saldo_alert_aktif", "") == "1"
 	if saldo < ambang {
 		if sudahAlert {
-			return // masih di bawah ambang & sudah pernah dinotif — tunggu naik
+			// masih di bawah ambang & sudah pernah dinotif — tunggu naik.
+			// TAPI: kalau terakhir dinotif sudah lewat 24 jam, kirim ulang
+			// (saldo gak kunjung di-top up — remind lagi).
+			if last := a.store.GetSetting("saldo_alert_at", ""); last != "" {
+				if t, err := time.ParseInLocation("2006-01-02 15:04:05", last, db.WIBLoc()); err == nil {
+					if db.NowWIB().Sub(t) >= 24*time.Hour {
+						a.kirimSaldoAlert(saldoStr, ambang)
+					}
+				}
+			} else {
+				a.kirimSaldoAlert(saldoStr, ambang)
+			}
+			return
 		}
-		pesan := "💸 *Saldo isipulsa menipis*\n\n" +
-			"Saldo: *" + saldoStr + "*\n" +
-			"Ambang: Rp " + strconv.FormatInt(ambang, 10) + "\n\n" +
-			"Top up deposit isipulsa sebelum order customer gagal."
-		log.Printf("[SALDO] %s", strings.ReplaceAll(pesan, "\n", " | "))
-		_ = a.store.SetSetting("saldo_alert_aktif", "1")
-		a.TgNotify(pesan)
+		a.kirimSaldoAlert(saldoStr, ambang)
 		return
 	}
 	// saldo cukup — reset flag biar penurunan berikutnya dinotif lagi
 	if sudahAlert {
 		_ = a.store.SetSetting("saldo_alert_aktif", "0")
-		log.Printf("[SALDO] pulih: %s (>= ambang Rp %s)", saldoStr, strconv.FormatInt(ambang, 10))
+		_ = a.store.SetSetting("saldo_alert_at", "")
+		log.Printf("[SALDO] pulih: %s (>= ambang Rp %d)", saldoStr, ambang)
 	}
+}
+
+// kirimSaldoAlert kirim notif + set flag (dipanggil 1x per penurunan, ulang 24 jam).
+func (a *API) kirimSaldoAlert(saldoStr string, ambang int64) {
+	pesan := "💸 *Saldo isipulsa menipis*\n\n" +
+		"Saldo: *" + saldoStr + "*\n" +
+		"Ambang: Rp " + strconv.FormatInt(ambang, 10) + "\n\n" +
+		"Top up deposit isipulsa sebelum order customer gagal."
+	log.Printf("[SALDO] %s", strings.ReplaceAll(pesan, "\n", " | "))
+	_ = a.store.SetSetting("saldo_alert_aktif", "1")
+	_ = a.store.SetSetting("saldo_alert_at", db.NowWIB().Format("2006-01-02 15:04:05"))
+	a.TgNotify(pesan)
 }
