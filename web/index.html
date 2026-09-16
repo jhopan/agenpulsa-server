@@ -302,8 +302,8 @@ small{color:#667085}
 </table>
 <h2 style="margin-top:18px">Tambah Key Baru</h2>
 <div class="grid2">
-<div><label>Nama (mis. Bot WA, Bot Telegram)</label><input id="akNama" style="width:100%" placeholder="Bot WA"></div>
-<div><label>Key (kosong = auto-generate aman)</label><input id="akKey" style="width:100%" placeholder="AP-XXXXXXXX"></div>
+<div><label>Nama (mis. Bot WA, Bot Telegram)</label><input id="keyNama" style="width:100%" placeholder="Bot WA"></div>
+<div><label>Key (kosong = auto-generate aman)</label><input id="keyVal" style="width:100%" placeholder="AP-XXXXXXXX"></div>
 </div>
 <label style="display:flex;align-items:center;gap:12px;margin-top:8px">
 <input type="checkbox" id="akOrder" checked style="width:auto"> Boleh order
@@ -595,13 +595,13 @@ async function loadSet(){
   }catch(e){}
 }
 async function tambahKey(){
-  const nama=$('akNama').value.trim();
+  const nama=$('keyNama').value.trim();
   if(!nama){flash('Nama wajib diisi',1);return}
   try{
     const r=await api('/api/v1/keys',{method:'POST',body:JSON.stringify({
-      nama:nama,key:$('akKey').value.trim(),boleh_order:$('akOrder').checked,boleh_admin:$('akAdmin').checked})});
+      nama:nama,key:$('keyVal').value.trim(),boleh_order:$('akOrder').checked,boleh_admin:$('akAdmin').checked})});
     flash('Key dibuat: '+r.key+' — salin sekarang, gak ditampilkan lagi lengkap dengan izinnya.');
-    $('akNama').value='';$('akKey').value='';$('akOrder').checked=true;$('akAdmin').checked=false;
+    $('keyNama').value='';$('keyVal').value='';$('akOrder').checked=true;$('akAdmin').checked=false;
     loadSet();
   }catch(e){flash(e.message,1)}
 }
