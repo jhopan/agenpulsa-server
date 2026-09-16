@@ -293,10 +293,11 @@ small{color:#667085}
 <div></div>
 </div>
 <div class="grid2">
-<div><label>Webhook URL agenpulsa — copy, lalu paste ke admin Paypan → Konfigurasi → Webhook → Tambah</label>
+<div><label>Webhook URL agenpulsa — copy, lalu paste ke admin Paypan → Konfigurasi → Webhook → Tambah. Ganti URL server di atas (mis. CF tunnel) kalau mau ubah.</label>
 <div style="display:flex;gap:8px;align-items:center">
 <input id="sWebhook" style="width:100%;font-family:monospace;font-size:12px" disabled>
 <button class="sec" style="width:auto;white-space:nowrap" onclick="copyWebhook()">📋 Copy</button>
+<button class="sec" style="width:auto;white-space:nowrap" onclick="editWebhook()">✏️ Edit URL server</button>
 </div></div>
 </div>
 <div class="btnrow">
@@ -649,6 +650,13 @@ function copyWebhook(){
   if(!v)return;
   navigator.clipboard.writeText(v).then(()=>flash('Webhook URL dicopy: '+v))
     .catch(()=>{prompt('Copy manual:',v)});
+}
+function editWebhook(){
+  // lompat ke kartu Integrasi + fokus kolom URL server
+  show('set');
+  $('sUrl').scrollIntoView({behavior:'smooth',block:'center'});
+  $('sUrl').focus();
+  flash('Edit URL server di kolom atas (mis. https://agenpulsa.jhopan.my.id) lalu 💾 Simpan Pengaturan.');
 }
 $('logout').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/'};
 loadStatus();loadReport();loadOrders();loadCatalog();
