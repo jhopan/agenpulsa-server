@@ -278,7 +278,7 @@ small{color:#667085}
 </div>
 <div class="grid2">
 <div><label>Paypan base URL (API server)</label><input id="sPaypanUrl" style="width:100%" placeholder="https://paypan.jhopan.my.id"></div>
-<div><label>Paypan token (Bearer, scope order)</label><input id="sPaypanToken" type="password" style="width:100%" placeholder="pp_xxxxxxxx (kosong = tidak diubah)"></div>
+<div><label>Paypan token (Bearer, scope order)</label><input id="sPaypanToken" style="width:100%" placeholder="pp_xxxxxxxx"></div>
 </div>
 <div class="grid2">
 <div><label>Folder profile Chromium</label><input id="sProfile" style="width:100%" disabled></div>
@@ -597,8 +597,8 @@ async function loadSet(){
     $('sPaypan').value=s.paypan_secret||'';
     $('sUrl').value=s.server_url||'';
     $('sPaypanUrl').value=s.paypan_base_url||'';
-    $('sPaypanToken').value='';
-    $('sPaypanToken').placeholder=s.paypan_token_set?'(tersimpan — kosongkan biar gak diubah)':'pp_xxxxxxxx';
+    $('sPaypanToken').value=s.paypan_token||'';
+    $('sPaypanToken').placeholder='pp_xxxxxxxx';
     $('sProfile').value=s.profile_dir||'';
     $('setNama').value=s.isipulsa_username||'';
     $('sBotAdmin').value=s.bot_admin_id||'';
@@ -606,8 +606,8 @@ async function loadSet(){
     // webhook URL = server_url + /webhook (dipakai paypan)
     $('sWebhook').value=(s.server_url||window.location.origin).replace(/\/+$/,'')+'/webhook';
     // token gak dibalikin (sensitif) — placeholder saja kalau sudah diset
-    $('sBotToken').value='';
-    $('sBotToken').placeholder=s.bot_tg_token_set?'(tersimpan — kosongkan biar gak diubah)':'1234567890:AAxxxx...';
+    $('sBotToken').value=s.bot_tg_token||'';
+    $('sBotToken').placeholder='1234567890:AAxxxx...';
     const ks=await api('/api/v1/keys').catch(()=>[]);
     const tb=document.querySelector('#apikeys tbody');tb.innerHTML='';
     if(!(ks||[]).length){tb.innerHTML='<tr><td colspan="5" class="empty">Belum ada API key</td></tr>';}
@@ -644,7 +644,7 @@ async function simpanSet(){
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
     flash('Disimpan: '+(r.changed||[]).join(', '));
-    $('sPass').value='';$('sBotToken').value='';$('sPaypanToken').value='';
+    $('sPass').value='';
     loadSet();
   }catch(e){flash(e.message,1)}
 }

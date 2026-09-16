@@ -238,23 +238,14 @@ func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, keys)
 }
 
-// getSettings: baca settings terpilih (admin only). Token bot gak dibalikin —
-// cukup flag bot_tg_token_set biar UI tahu sudah pernah diset.
+// getSettings: baca settings terpilih (admin only). Token ditampilkan apa
+// adanya — single-admin tool, copy-paste antar panel harus gampang.
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 	out := map[string]string{}
 	for k := range settingKeys {
 		out[k] = a.store.GetSetting(k, "")
 	}
 	out["profile_dir"] = a.eng.ProfileDir()
-	// token sensitif gak dibalikin — cukup flag "terset" biar UI tahu.
-	if out["bot_tg_token"] != "" {
-		out["bot_tg_token"] = ""
-		out["bot_tg_token_set"] = "1"
-	}
-	if out["paypan_token"] != "" {
-		out["paypan_token"] = ""
-		out["paypan_token_set"] = "1"
-	}
 	writeJSON(w, 200, out)
 }
 
