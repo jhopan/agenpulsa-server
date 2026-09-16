@@ -190,7 +190,7 @@ small{color:#667085}
 <div class="card">
 <h2>Daftar Katalog</h2>
 <table id="catalog">
-<tr><th>#</th><th>Label</th><th>Tab</th><th>Voucher</th><th class="money">Modal</th><th class="money">Harga Jual</th><th></th></tr>
+<tr><th>#</th><th>Label</th><th>Tab</th><th>Voucher</th><th>Provider</th><th class="money">Modal</th><th class="money">Harga Jual</th><th></th></tr>
 <tbody></tbody>
 </table>
 <p><small>Klik <b>Edit</b> untuk mengubah — data masuk ke form atas.</small></p>
@@ -502,9 +502,9 @@ async function loadCatalog(){
   try{
     const its=await api('/api/v1/catalog?all=1');
     const tb=document.querySelector('#catalog tbody');tb.innerHTML='';
-    if(!(its||[]).length){tb.innerHTML='<tr><td colspan="7" class="empty">Belum ada katalog</td></tr>';return}
+    if(!(its||[]).length){tb.innerHTML='<tr><td colspan="8" class="empty">Belum ada katalog</td></tr>';return}
     (its||[]).forEach(it=>{
-      tb.insertAdjacentHTML('beforeend',`<tr><td>${it.id}</td><td>${esc(it.label)}</td><td>${esc(it.tab)}</td><td>${esc(it.voucher||'-')}</td><td class="money">${rp(it.harga_max)}</td><td class="money"><b>${rp(it.harga_jual)}</b></td><td><button class="sec" onclick='editKatalog(${JSON.stringify(it).replaceAll("'", "&#39;")})'>Edit</button> <button class="del" onclick="hapusKatalog(${it.id})">Hapus</button></td></tr>`);
+      tb.insertAdjacentHTML('beforeend',`<tr><td>${it.id}</td><td>${esc(it.label)}</td><td>${esc(it.tab)}</td><td>${esc(it.voucher||'-')}</td><td><small style="color:#667085">${esc(it.operator||'-')}</small></td><td class="money">${rp(it.harga_max)}</td><td class="money"><b>${rp(it.harga_jual)}</b></td><td><button class="sec" onclick='editKatalog(${JSON.stringify(it).replaceAll("'", "&#39;")})'>Edit</button> <button class="del" onclick="hapusKatalog(${it.id})">Hapus</button></td></tr>`);
     });
   }catch(e){}
 }
