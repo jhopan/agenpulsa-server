@@ -86,19 +86,24 @@ func NewPaypanClient(cfg PaypanConfig) *PaypanClient {
 	return &PaypanClient{http: &http.Client{Timeout: cfg.Timeout}}
 }
 
-// liveCfg: env (startup) -> fallback settings DB. Dipanggil tiap request.
+// liveCfg: sumber kebenaran = settings DB (web admin). ENV hanya bootstrap
+// awal: kalau DB masih kosong, seed dari env SEKALI lalu web admin yang pegang.
+// Tidak ada overwrite dua arah — satu setting satu tempat edit.
 func (c *PaypanClient) liveCfg(store *db.Store) PaypanConfig {
-	cfg := LoadPaypanConfig()
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = strings.TrimRight(store.GetSetting("paypan_base_url", ""), "/")
+	seed := func(key, env string) {
+		if strings.TrimSpace(store.GetSetting(key, "")) == "" && strings.TrimSpace(os.Getenv(env)) != "" {
+			_ = store.SetSetting(key, strings.TrimSpace(os.Getenv(env)))
+		}
 	}
-	if cfg.Token == "" {
-		cfg.Token = strings.TrimSpace(store.GetSetting("paypan_token", ""))
+	seed("paypan_base_url", "PAYPAN_BASE_URL")
+	seed("paypan_token", "PAYPAN_TOKEN")
+	seed("paypan_secret", "PAYPAN_WEBHOOK_SECRET")
+	return PaypanConfig{
+		BaseURL: strings.TrimRight(store.GetSetting("paypan_base_url", ""), "/"),
+		Token:   strings.TrimSpace(store.GetSetting("paypan_token", "")),
+		Secret:  strings.TrimSpace(store.GetSetting("paypan_secret", "")),
+		Timeout: c.http.Timeout,
 	}
-	if cfg.Secret == "" {
-		cfg.Secret = strings.TrimSpace(store.GetSetting("paypan_secret", ""))
-	}
-	return cfg
 }
 
 // CreateInvoice buat invoice QRIS. price min 1000, max 9000000.

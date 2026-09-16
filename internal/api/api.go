@@ -29,16 +29,9 @@ type API struct {
 
 func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 	sub, _ := fs.Sub(webFS, "web")
-	cfg := LoadPaypanConfig()
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = strings.TrimRight(store.GetSetting("paypan_base_url", ""), "/")
-	}
-	if cfg.Token == "" {
-		cfg.Token = strings.TrimSpace(store.GetSetting("paypan_token", ""))
-	}
-	if cfg.Secret == "" {
-		cfg.Secret = strings.TrimSpace(store.GetSetting("paypan_secret", ""))
-	}
+	// ENV = level infrastruktur saja (port, path). Config runtime (paypan dll)
+	// murni dari settings DB via web admin — live, tanpa rebuild/restart.
+	cfg := PaypanConfig{Timeout: 30 * time.Second}
 	a := &API{store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg)}
 	// notif hasil order berbayar -> Telegram admin (kalau bot dikonfigurasi).
 	eng.Notifier = func(o db.Order, status, pesan string) {
