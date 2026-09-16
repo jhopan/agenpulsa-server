@@ -31,6 +31,47 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 
 RE_NONDIGIT = re.compile(r"[^\d]")
 
+# Prefix nomor Indonesia -> nama operator (dipakai guard operator sebelum order).
+PREFIX_OPERATOR = [
+    ("62811", "Telkomsel"), ("62812", "Telkomsel"), ("62813", "Telkomsel"),
+    ("62821", "Telkomsel"), ("62822", "Telkomsel"), ("62823", "Telkomsel"),
+    ("62852", "Telkomsel"), ("62853", "Telkomsel"),
+    ("62851", "XL"), ("62877", "XL"), ("62878", "XL"),
+    ("62817", "XL"), ("62818", "XL"), ("62819", "XL"), ("62859", "XL"),
+    ("62895", "Three"), ("62896", "Three"), ("62897", "Three"), ("62898", "Three"), ("62899", "Three"),
+    ("62831", "Indosat"), ("62832", "Indosat"), ("62833", "Indosat"), ("62838", "Indosat"),
+    ("62814", "Indosat"), ("62815", "Indosat"), ("62816", "Indosat"),
+    ("62855", "Indosat"), ("62856", "Indosat"), ("62857", "Indosat"), ("62858", "Indosat"),
+    ("62888", "Smartfren"), ("62889", "Smartfren"), ("62881", "Smartfren"), ("62882", "Smartfren"), ("62883", "Smartfren"),
+]
+
+
+def detect_operator(nomor: str) -> str:
+    """08xxx/62xxx -> nama operator. '' kalau gak dikenali."""
+    d = RE_NONDIGIT.sub("", nomor or "")
+    if d.startswith("0"):
+        d = "62" + d[1:]
+    if not d.startswith("62"):
+        return ""
+    for prefix, op in PREFIX_OPERATOR:
+        if d.startswith(prefix):
+            return op
+    return ""
+
+
+def operator_matches(nomor: str, operator_nama: str) -> bool:
+    """True kalau operator nomor cocok dgn operator paket (fuzzy: Telkomsel
+    cocok dgn 'Telkomsel (Ilmupedia)', XL dgn 'Xl Paket Game', dst)."""
+    op_num = detect_operator(nomor).lower()
+    if not op_num:
+        return True  # nomor gak dikenali -> jangan blokir (biarkan isipulsa validasi)
+    op_paket = (operator_nama or "").lower()
+    if not op_paket:
+        return True  # katalog gak ada info operator -> skip guard
+    # 'telkomsel (ilmupedia)' -> 'telkomsel'
+    op_paket_base = re.split(r"[\s(/-]", op_paket.strip())[0]
+    return op_num == op_paket_base or op_num in op_paket or op_paket_base in op_num
+
 
 def get_retry(s, url, tries=3, timeout=30, **kw):
     """GET dengan retry — network flake / TLS timeout jangan bikin operasi gagal."""
@@ -210,7 +251,15 @@ def op_order(args):
         catatan = f"[voucher berubah {voucher} -> {entri['voucher']}] " if voucher else ""
         voucher, nama_asli, harga = entri["voucher"], entri["nama"], entri["harga"]
 
-    # 3. guard harga
+    # 3. guard operator: prefix nomor harus cocok dgn operator paket
+    #    (ilmupedia = khusus telkomsel dll) — cegah salah order + saldo kepotong.
+    operator_nama = entri.get("operator", "")
+    if not operator_matches(args.nomor, operator_nama):
+        out(False, pesan=(f"ORDER DIBATALKAN: paket '{nama_asli}' khusus {operator_nama}, "
+                          f"tapi nomor {args.nomor} bukan {operator_nama}. "
+                          f"Gunakan nomor {operator_nama} yang sesuai."))
+
+    # 4. guard harga
     if args.harga_max and harga > args.harga_max:
         out(False, pesan=(f"ORDER DIBATALKAN: harga naik. Sekarang Rp {harga:,}. "
                           f"Batas Rp {args.harga_max:,}".replace(",", ".")))
