@@ -289,6 +289,13 @@ small{color:#667085}
 <div><label>Ambang alert saldo (Rp)</label><input id="sSaldoMin" type="number" min="0" step="1000" style="width:100%" placeholder="20000"></div>
 <div></div>
 </div>
+<div class="grid2">
+<div><label>Webhook URL (daftarkan di admin Paypan → Konfigurasi → Webhook)</label>
+<div style="display:flex;gap:8px;align-items:center">
+<input id="sWebhook" style="width:100%;font-family:monospace;font-size:12px" disabled>
+<button class="sec" style="width:auto;white-space:nowrap" onclick="copyWebhook()">📋 Copy</button>
+</div></div>
+</div>
 <div class="btnrow">
 <button class="sec" onclick="tesBot()">🔔 Tes Notif</button>
 </div>
@@ -585,6 +592,8 @@ async function loadSet(){
     $('setNama').value=s.isipulsa_username||'';
     $('sBotAdmin').value=s.bot_admin_id||'';
     $('sSaldoMin').value=s.saldo_min||'20000';
+    // webhook URL = server_url + /webhook (dipakai paypan)
+    $('sWebhook').value=(s.server_url||window.location.origin).replace(/\/+$/,'')+'/webhook';
     // token gak dibalikin (sensitif) — placeholder saja kalau sudah diset
     $('sBotToken').value='';
     $('sBotToken').placeholder=s.bot_tg_token_set?'(tersimpan — kosongkan biar gak diubah)':'1234567890:AAxxxx...';
@@ -631,6 +640,12 @@ async function tesBot(){
     await api('/api/v1/tes-bot',{method:'POST'});
     flash('✅ Pesan tes terkirim — cek Telegram kamu');
   }catch(e){flash(e.message,1)}
+}
+function copyWebhook(){
+  const v=$('sWebhook').value;
+  if(!v)return;
+  navigator.clipboard.writeText(v).then(()=>flash('Webhook URL dicopy: '+v))
+    .catch(()=>{prompt('Copy manual:',v)});
 }
 $('logout').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/'};
 loadStatus();loadReport();loadOrders();loadCatalog();
