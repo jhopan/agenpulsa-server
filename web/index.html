@@ -305,6 +305,10 @@ small{color:#667085}
 <div><label>Interval cek saldo (menit, 5-1440)</label><input id="sSaldoInt" type="number" min="5" max="1440" step="5" style="width:100%" placeholder="30"></div>
 </div>
 <div class="grid2">
+<div><label>Ulang notif saldo tiap (jam)</label><input id="sSaldoNotifJam" type="number" min="1" max="72" step="1" style="width:100%" placeholder="1"></div>
+<div></div>
+</div>
+<div class="grid2">
 <div><label>Webhook URL agenpulsa — copy, lalu paste ke admin Paypan → Konfigurasi → Webhook → Tambah. Ganti URL server di atas (mis. CF tunnel) kalau mau ubah.</label>
 <div style="display:flex;gap:8px;align-items:center">
 <input id="sWebhook" style="width:100%;font-family:monospace;font-size:12px" disabled>
@@ -640,6 +644,7 @@ async function loadSet(){
     $('sBotAdmin').value=s.bot_admin_id||'';
     $('sSaldoMin').value=s.saldo_min||'20000';
     $('sSaldoInt').value=s.saldo_interval_menit||'30';
+    $('sSaldoNotifJam').value=s.saldo_notif_jam||'1';
     // webhook URL = server_url + /webhook (dipakai paypan)
     $('sWebhook').value=(s.server_url||window.location.origin).replace(/\/+$/,'')+'/webhook';
     // token gak dibalikin (sensitif) — placeholder saja kalau sudah diset
@@ -680,6 +685,7 @@ async function simpanSet(){
     if($('sBotAdmin').value.trim())body.bot_admin_id=$('sBotAdmin').value.trim();
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     if($('sSaldoInt').value)body.saldo_interval_menit=$('sSaldoInt').value.trim();
+    if($('sSaldoNotifJam').value)body.saldo_notif_jam=$('sSaldoNotifJam').value.trim();
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
     flash('Disimpan: '+(r.changed||[]).join(', '));
     $('sPass').value='';

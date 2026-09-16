@@ -12,7 +12,8 @@ import (
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
 
-const saldoMinDefault = 20000 // Rp
+const saldoMinDefault = 20000  // Rp
+const saldoNotifJamDefault = 1 // ulang notif tiap N jam selama masih di bawah ambang
 
 // parseSaldo "Rp 17.233" -> 17233. Gagal = -1.
 func parseSaldo(s string) int64 {
@@ -76,22 +77,28 @@ func (a *API) saldoTick() {
 	}
 	sudahAlert := a.store.GetSetting("saldo_alert_aktif", "") == "1"
 	if saldo < ambang {
-		if sudahAlert {
-			// masih di bawah ambang & sudah pernah dinotif — tunggu naik.
-			// TAPI: kalau terakhir dinotif sudah lewat 24 jam, kirim ulang
-			// (saldo gak kunjung di-top up — remind lagi).
-			if last := a.store.GetSetting("saldo_alert_at", ""); last != "" {
-				if t, err := time.ParseInLocation("2006-01-02 15:04:05", last, db.WIBLoc()); err == nil {
-					if db.NowWIB().Sub(t) >= 24*time.Hour {
-						a.kirimSaldoAlert(saldoStr, ambang)
-					}
-				}
-			} else {
-				a.kirimSaldoAlert(saldoStr, ambang)
+		// masih di bawah ambang & sudah pernah dinotif — tunggu naik.
+		// TAPI: kalau terakhir dinotif sudah lewat `saldo_notif_jam` (default 1
+		// jam), kirim ulang — saldo gak kunjung di-top up, remind lagi.
+		ulangJam := int64(saldoNotifJamDefault)
+		if v := a.store.GetSetting("saldo_notif_jam", ""); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+				ulangJam = n
 			}
+		}
+		if !sudahAlert {
+			a.kirimSaldoAlert(saldoStr, ambang)
 			return
 		}
-		a.kirimSaldoAlert(saldoStr, ambang)
+		if last := a.store.GetSetting("saldo_alert_at", ""); last != "" {
+			if t, err := time.ParseInLocation("2006-01-02 15:04:05", last, db.WIBLoc()); err == nil {
+				if db.NowWIB().Sub(t) >= time.Duration(ulangJam)*time.Hour {
+					a.kirimSaldoAlert(saldoStr, ambang)
+				}
+			}
+		} else {
+			a.kirimSaldoAlert(saldoStr, ambang)
+		}
 		return
 	}
 	// saldo cukup — reset flag biar penurunan berikutnya dinotif lagi
