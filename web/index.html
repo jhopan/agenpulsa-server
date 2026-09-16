@@ -34,6 +34,9 @@ h2{margin:0 0 12px;font-size:16px;color:#101828}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
 th{color:#667085;font-weight:600;background:#f9fafb}
+/* order history: kartu melebar penuh + pesan panjang wrap memanjang ke bawah */
+#orders td:last-child{max-width:420px;word-break:break-word;white-space:normal;overflow-wrap:anywhere}
+.tblwrap{overflow-x:auto}
 td.empty{text-align:center;color:#98a2b3;padding:18px}
 td small{color:#98a2b3;font-size:12px;white-space:nowrap}
 .money{font-variant-numeric:tabular-nums;text-align:right}
@@ -97,7 +100,11 @@ small{color:#667085}
 <div class="stat"><div class="n" id="rProfit">-</div><div class="l">Profit</div></div>
 <div class="stat"><div class="n" id="rModal">-</div><div class="l">Modal</div></div>
 </div>
-<div class="card"><h2>Order terakhir</h2>
+<div class="card"><h2>Order terakhir
+<span style="float:right;font-size:12px">
+<button class="sec" style="padding:5px 10px;font-size:12px" onclick="hapusHistory('failed')">🗑 Hapus Failed</button>
+<button class="del" style="padding:5px 10px;font-size:12px" onclick="hapusHistory('semua')">🗑 Hapus Semua</button>
+</span></h2>
 <table id="orders">
 <tr><th>Waktu</th><th>Paket</th><th>Nomor</th><th class="money">Modal</th><th class="money">Jual</th><th>Status</th><th>Pesan</th></tr>
 <tbody></tbody>
@@ -459,11 +466,37 @@ async function loadReport(){
 async function loadOrders(){
   try{
     const os=await api('/api/v1/orders?limit=20');
-    const rows=(os||[]).map(o=>`<tr><td><small>${esc((o.created_at||'').slice(5,16))}</small></td><td>${esc(o.label)}</td><td>${esc(o.nomor)}</td><td class="money">${rp(o.modal)}</td><td class="money"><b>${rp(o.harga_jual)}</b></td><td><span class="badge ${o.status}">${o.status}</span></td><td><small>${esc(o.pesan||'')}</small></td></tr>`).join('');
+    const rows=(os||[]).map(o=>{
+      // pesan error: buang boilerplate (ORDER GAGAL. Alasan:/ERROR: isip_api[...] JSON) -> inti masalah saja
+      let pesan=esc(o.pesan||'');
+      const m=pesan.match(/"pesan"\s*:\s*"([^"]+)"/);         // raw JSON isip_api
+      if(m)pesan=m[1];
+      pesan=pesan.replace(/^ERROR: isip_api.*?:\s*/,'')
+                 .replace(/^ORDER GAGAL\. Alasan:\s*/i,'')
+                 .replace(/".*?"\s*\]/,'')                     // sisa bracket args
+                 .trim();
+      if(pesan.length>160)pesan=pesan.slice(0,160)+'…';
+      return `<tr><td><small>${esc((o.created_at||'').slice(5,16))}</small></td><td>${esc(o.label)}</td><td>${esc(o.nomor)}</td><td class="money">${rp(o.modal)}</td><td class="money"><b>${rp(o.harga_jual)}</b></td><td><span class="badge ${o.status}">${o.status}</span></td><td><small title="${esc(o.pesan||'')}">${pesan}</small></td></tr>`;
+    }).join('');
     const empty='<tr><td colspan="7" class="empty">Belum ada order</td></tr>';
     document.querySelector('#orders tbody').innerHTML=rows||empty;
     document.querySelector('#lOrders tbody').innerHTML=rows||empty;
   }catch(e){}
+}
+async function hapusHistory(mode){
+  let url='/api/v1/orders';
+  if(mode==='failed'){
+    if(!confirm('Hapus semua order FAILED?'))return;
+    url+='?status=failed';
+  }else{
+    if(!confirm('Hapus SEMUA history order? (catalog & settings aman)'))return;
+    url+='?konfirmasi=ya';
+  }
+  try{
+    const r=await api(url,{method:'DELETE'});
+    flash('History dihapus: '+r.hapus+' order');
+    loadOrders();
+  }catch(e){flash(e.message,1)}
 }
 async function loadCatalog(){
   try{

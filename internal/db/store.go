@@ -95,6 +95,29 @@ func (s *Store) DeleteCatalog(id int64) error {
 	return err
 }
 
+// ---------- Order history cleanup ----------
+
+func (s *Store) DeleteOrder(id int64) error {
+	_, err := s.DB.Exec("DELETE FROM orders WHERE id=?", id)
+	return err
+}
+
+func (s *Store) DeleteOrdersByStatus(status string) (int64, error) {
+	r, err := s.DB.Exec("DELETE FROM orders WHERE status=?", status)
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
+}
+
+func (s *Store) DeleteAllOrders() (int64, error) {
+	r, err := s.DB.Exec("DELETE FROM orders")
+	if err != nil {
+		return 0, err
+	}
+	return r.RowsAffected()
+}
+
 // ---------- Orders ----------
 
 type Order struct {

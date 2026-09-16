@@ -206,6 +206,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/orders", a.auth(false, a.createOrder))
 	mux.HandleFunc("GET /api/v1/orders/{id}", a.auth(false, a.getOrder))
 	mux.HandleFunc("GET /api/v1/orders", a.auth(false, a.listOrders))
+	mux.HandleFunc("DELETE /api/v1/orders", a.auth(true, a.hapusHistory))
 	mux.HandleFunc("POST /api/v1/orders/pending", a.auth(false, a.createPending)) // flow paypan
 
 	mux.HandleFunc("GET /api/v1/status", a.auth(false, a.status))
@@ -508,6 +509,42 @@ func (a *API) getOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, o)
+}
+
+// hapusHistory: bersihkan order history (admin). Query:
+//   ?id=<order_id>  -> hapus satu order
+//   ?status=failed  -> hapus semua order berstatus itu (kosong = SEMUA)
+func (a *API) hapusHistory(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if id > 0 {
+		if err := a.store.DeleteOrder(id); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "hapus": 1})
+		return
+	}
+	if status != "" && status != "semua" {
+		n, err := a.store.DeleteOrdersByStatus(status)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "hapus": n})
+		return
+	}
+	// kosong/semua -> hapus SEMUA order (tapi butuh konfirmasi=ya)
+	if r.URL.Query().Get("konfirmasi") != "ya" {
+		jsonErr(w, 400, "hapus SEMUA order? kirim ?konfirmasi=ya (atau pakai filter status/id)")
+		return
+	}
+	n, err := a.store.DeleteAllOrders()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "hapus": n})
 }
 
 func (a *API) listOrders(w http.ResponseWriter, r *http.Request) {
