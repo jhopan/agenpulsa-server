@@ -273,8 +273,12 @@ small{color:#667085}
 <div class="card">
 <h2>Integrasi</h2>
 <div class="grid2">
-<div><label>URL server (publik, untuk client & Paypan)</label><input id="sUrl" style="width:100%" placeholder="http://192.168.1.10:8081"></div>
+<div><label>URL server (publik, untuk client & webhook)</label><input id="sUrl" style="width:100%" placeholder="http://192.168.1.10:8081"></div>
 <div><label>Paypan secret (HMAC webhook)</label><input id="sPaypan" style="width:100%" placeholder="SECRET-SHARED"></div>
+</div>
+<div class="grid2">
+<div><label>Paypan base URL (API server)</label><input id="sPaypanUrl" style="width:100%" placeholder="https://paypan.jhopan.my.id"></div>
+<div><label>Paypan token (Bearer, scope order)</label><input id="sPaypanToken" type="password" style="width:100%" placeholder="pp_xxxxxxxx (kosong = tidak diubah)"></div>
 </div>
 <div class="grid2">
 <div><label>Folder profile Chromium</label><input id="sProfile" style="width:100%" disabled></div>
@@ -592,6 +596,9 @@ async function loadSet(){
     $('sUser').value=s.admin_user||'';
     $('sPaypan').value=s.paypan_secret||'';
     $('sUrl').value=s.server_url||'';
+    $('sPaypanUrl').value=s.paypan_base_url||'';
+    $('sPaypanToken').value='';
+    $('sPaypanToken').placeholder=s.paypan_token_set?'(tersimpan — kosongkan biar gak diubah)':'pp_xxxxxxxx';
     $('sProfile').value=s.profile_dir||'';
     $('setNama').value=s.isipulsa_username||'';
     $('sBotAdmin').value=s.bot_admin_id||'';
@@ -630,12 +637,14 @@ async function simpanSet(){
     if($('sPass').value)body.admin_pass=$('sPass').value;
     if($('sPaypan').value.trim())body.paypan_secret=$('sPaypan').value.trim();
     if($('sUrl').value.trim())body.server_url=$('sUrl').value.trim().replace(/\/+$/,'');
+    if($('sPaypanUrl').value.trim())body.paypan_base_url=$('sPaypanUrl').value.trim().replace(/\/+$/,'');
+    if($('sPaypanToken').value.trim())body.paypan_token=$('sPaypanToken').value.trim();
     if($('sBotToken').value.trim())body.bot_tg_token=$('sBotToken').value.trim();
     if($('sBotAdmin').value.trim())body.bot_admin_id=$('sBotAdmin').value.trim();
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
     flash('Disimpan: '+(r.changed||[]).join(', '));
-    $('sPass').value='';$('sBotToken').value='';
+    $('sPass').value='';$('sBotToken').value='';$('sPaypanToken').value='';
     loadSet();
   }catch(e){flash(e.message,1)}
 }

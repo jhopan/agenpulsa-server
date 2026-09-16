@@ -103,7 +103,7 @@ func (a *API) reconcileOnce() {
 		if err != nil || created.After(cutoff) {
 			continue // masih dalam masa bayar/webhook retry
 		}
-		inv, err := a.ppClient.GetInvoice(o.InvoiceID)
+		inv, err := a.ppClient.GetInvoice(a.store, o.InvoiceID)
 		if err != nil {
 			continue // paypan gak bisa dihubungi — coba lagi tick berikutnya
 		}
@@ -483,7 +483,7 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "harga katalog di luar batas paypan (min 1.000)")
 		return
 	}
-	inv, err := a.ppClient.CreateInvoice(o.HargaJual, o.Label+" "+o.Nomor)
+	inv, err := a.ppClient.CreateInvoice(a.store, o.HargaJual, o.Label+" "+o.Nomor)
 	if err != nil {
 		jsonErr(w, 502, "gagal buat invoice paypan: "+err.Error())
 		return

@@ -73,42 +73,62 @@ type PaypanInvoice struct {
 	QRURL     string `json:"qr_url"`
 }
 
-// PaypanClient klien HTTP Paypan.
+// PaypanClient klien HTTP Paypan. Config LIVE: base URL/token/secret dibaca
+// dari settings DB tiap request (fallback env saat startup) — ubah di web
+// admin -> Pengaturan langsung aktif, tanpa rebuild/restart.
 type PaypanClient struct {
-	cfg  PaypanConfig
-	http *http.Client
+	store *db.Store
+	http  *http.Client
 }
 
 func NewPaypanClient(cfg PaypanConfig) *PaypanClient {
-	return &PaypanClient{cfg: cfg, http: &http.Client{Timeout: cfg.Timeout}}
+	// cfg dipakai hanya utk timeout; nilai request dibaca live dari store.
+	return &PaypanClient{http: &http.Client{Timeout: cfg.Timeout}}
+}
+
+// liveCfg: env (startup) -> fallback settings DB. Dipanggil tiap request.
+func (c *PaypanClient) liveCfg(store *db.Store) PaypanConfig {
+	cfg := LoadPaypanConfig()
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = strings.TrimRight(store.GetSetting("paypan_base_url", ""), "/")
+	}
+	if cfg.Token == "" {
+		cfg.Token = strings.TrimSpace(store.GetSetting("paypan_token", ""))
+	}
+	if cfg.Secret == "" {
+		cfg.Secret = strings.TrimSpace(store.GetSetting("paypan_secret", ""))
+	}
+	return cfg
 }
 
 // CreateInvoice buat invoice QRIS. price min 1000, max 9000000.
 // Return invoice + error. Total yang dibayar customer = price + code.
-func (c *PaypanClient) CreateInvoice(price int64, label string) (*PaypanInvoice, error) {
-	if !c.cfg.Enabled() {
+func (c *PaypanClient) CreateInvoice(store *db.Store, price int64, label string) (*PaypanInvoice, error) {
+	cfg := c.liveCfg(store)
+	if !cfg.Enabled() {
 		return nil, fmt.Errorf("paypan belum dikonfigurasi (PAYPAN_BASE_URL/PAYPAN_TOKEN)")
 	}
 	if price < 1000 || price > 9000000 {
 		return nil, fmt.Errorf("harga di luar batas paypan (1.000 - 9.000.000)")
 	}
 	body, _ := json.Marshal(map[string]any{"price": price, "label": label})
-	req, err := http.NewRequest("POST", c.cfg.BaseURL+"/api/invoice", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", cfg.BaseURL+"/api/invoice", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	req.Header.Set("Content-Type", "application/json")
 	return c.do(req)
 }
 
 // GetInvoice cek status invoice (polling cadangan; utama = webhook).
-func (c *PaypanClient) GetInvoice(id string) (*PaypanInvoice, error) {
-	req, err := http.NewRequest("GET", c.cfg.BaseURL+"/api/invoice/"+id, nil)
+func (c *PaypanClient) GetInvoice(store *db.Store, id string) (*PaypanInvoice, error) {
+	cfg := c.liveCfg(store)
+	req, err := http.NewRequest("GET", cfg.BaseURL+"/api/invoice/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	return c.do(req)
 }
 

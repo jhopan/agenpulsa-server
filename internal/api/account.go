@@ -152,10 +152,12 @@ func (a *API) simpanUsername(w http.ResponseWriter, r *http.Request) {
 
 var settingKeys = map[string]bool{
 	"paypan_secret":     true,
+	"paypan_base_url":   true, // base URL API paypan (create/get invoice)
+	"paypan_token":      true, // Bearer token scope order
 	"admin_user":        true,
 	"admin_pass":        true,
 	"isipulsa_username": true,
-	"server_url":        true, // URL publik server, dipakai client & callback paypan
+	"server_url":        true, // URL publik server, dipakai client & webhook
 	"bot_tg_token":      true, // token bot Telegram — server kirim notif via Bot API
 	"bot_admin_id":      true, // user ID Telegram penerima notif (mis. 123456789)
 	"saldo_min":         true, // ambang alert saldo isipulsa (default 20000)
@@ -244,11 +246,15 @@ func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 		out[k] = a.store.GetSetting(k, "")
 	}
 	out["profile_dir"] = a.eng.ProfileDir()
-	if tok := out["bot_tg_token"]; tok != "" {
-		out["bot_tg_token"] = "" // jangan bocorkan
+	// token sensitif gak dibalikin — cukup flag "terset" biar UI tahu.
+	if out["bot_tg_token"] != "" {
+		out["bot_tg_token"] = ""
 		out["bot_tg_token_set"] = "1"
 	}
-	delete(out, "bot_tg_token")
+	if out["paypan_token"] != "" {
+		out["paypan_token"] = ""
+		out["paypan_token_set"] = "1"
+	}
 	writeJSON(w, 200, out)
 }
 
@@ -270,5 +276,6 @@ func (a *API) setSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		changed = append(changed, k)
 	}
+	// paypan config live — client baca settings tiap request, gak perlu rebuild.
 	writeJSON(w, 200, map[string]any{"ok": true, "changed": changed})
 }

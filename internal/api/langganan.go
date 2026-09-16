@@ -83,7 +83,7 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 	detailJSON, _ := json.Marshal(detail)
 
 	// invoice QRIS paypan (harga = harga_jual katalog)
-	inv, err := a.ppClient.CreateInvoice(it.HargaJual, it.Label+" "+nomor+" (langganan)")
+	inv, err := a.ppClient.CreateInvoice(a.store, it.HargaJual, it.Label+" "+nomor+" (langganan)")
 	if err != nil {
 		jsonErr(w, 502, "gagal buat invoice paypan: "+err.Error())
 		return

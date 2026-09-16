@@ -32,8 +32,8 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "body kosong")
 		return
 	}
-	// secret webhook: env dulu, fallback settings DB.
-	secret := a.ppCfg.Secret
+	// secret webhook: settings DB tiap request (live) — fallback env via liveCfg.
+	secret := a.ppClient.liveCfg(a.store).Secret
 	if secret == "" {
 		secret = a.store.GetSetting("paypan_secret", "")
 	}
