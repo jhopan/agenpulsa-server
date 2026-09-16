@@ -30,16 +30,31 @@ func parseSaldo(s string) int64 {
 	return v
 }
 
-// StartSaldoMonitor loop per 30 menit: cek saldo isipulsa, alert kalau < ambang.
+// saldoIntervalDefault jeda antar cek saldo (menit). Bisa diubah live via
+// settings `saldo_interval_menit` (web admin → Pengaturan).
+const saldoIntervalDefault = 30
+
+// StartSaldoMonitor loop cek saldo isipulsa, alert kalau < ambang.
+// Interval dibaca dari settings tiap loop — ubah di web langsung kepakai.
 func (a *API) StartSaldoMonitor() {
 	go func() {
 		// tunggu 2 menit pertama (biar login/browser siap, gak balapan saat boot)
 		time.Sleep(2 * time.Minute)
 		for {
 			a.saldoTick()
-			time.Sleep(30 * time.Minute)
+			time.Sleep(time.Duration(a.saldoIntervalMenit()) * time.Minute)
 		}
 	}()
+}
+
+// saldoIntervalMenit baca settings saldo_interval_menit; invalid/0 = default.
+func (a *API) saldoIntervalMenit() int {
+	v := a.store.GetSetting("saldo_interval_menit", "")
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 5 || n > 1440 { // batas wajar: 5 menit - 24 jam
+		return saldoIntervalDefault
+	}
+	return n
 }
 
 func (a *API) saldoTick() {

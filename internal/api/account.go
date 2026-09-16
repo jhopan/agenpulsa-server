@@ -151,16 +151,17 @@ func (a *API) simpanUsername(w http.ResponseWriter, r *http.Request) {
 // ---------- pengaturan (settings) ----------
 
 var settingKeys = map[string]bool{
-	"paypan_secret":     true,
-	"paypan_base_url":   true, // base URL API paypan (create/get invoice)
-	"paypan_token":      true, // Bearer token scope order
-	"admin_user":        true,
-	"admin_pass":        true,
-	"isipulsa_username": true,
-	"server_url":        true, // URL publik server, dipakai client & webhook
-	"bot_tg_token":      true, // token bot Telegram — server kirim notif via Bot API
-	"bot_admin_id":      true, // user ID Telegram penerima notif (mis. 123456789)
-	"saldo_min":         true, // ambang alert saldo isipulsa (default 20000)
+	"paypan_secret":        true,
+	"paypan_base_url":      true, // base URL API paypan (create/get invoice)
+	"paypan_token":         true, // Bearer token scope order
+	"admin_user":           true,
+	"admin_pass":           true,
+	"isipulsa_username":    true,
+	"server_url":           true, // URL publik server, dipakai client & webhook
+	"bot_tg_token":         true, // token bot Telegram — server kirim notif via Bot API
+	"bot_admin_id":         true, // user ID Telegram penerima notif (mis. 123456789)
+	"saldo_min":            true, // ambang alert saldo isipulsa (default 20000)
+	"saldo_interval_menit": true, // jeda cek saldo (menit, default 30, 5-1440)
 }
 
 // tambahKey: buat/upsert API key client (admin only).
