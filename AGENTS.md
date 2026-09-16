@@ -115,6 +115,31 @@ go vet ./...
 
 Test hermetic: SQLite di t.TempDir + httptest, browser rod tidak jalan (lazy). Butuh Go 1.25.
 
+## Batas lingkup (WAJIB dipatuhi)
+
+Repo ini = **hanya agenpulsa-server**. Agent TIDAK BOLEH mengubah file di luar
+lingkup ini (project lain, deploy tooling milik service lain, dsb). Kalau
+masalah terdeteksi di project lain:
+
+1. **JANGAN edit langsung** — cukup LAPOR: apa yang salah + file/line-nya +
+   saran perbaikan, lalu biarkan user putuskan (atau dikerjakan di sesi
+   project yang tepat).
+2. Contoh lintasan yang pernah terjadi: bug `helper/isip_api.py` butuh
+   playwright di debian → itu masih dalam repo ini (di-scope OK). Bandingkan:
+   bug di `jhopanwabot` / `PayPan` / `tempmail` → LAPOR saja, jangan sentuh.
+
+Lingkup aman (boleh edit):
+- Semua file di repo ini (`internal/`, `web/`, `helper/`, `main*.go`, `AGENTS.md`, `DEPLOY.md`)
+- Deploy target: `laptop-debian:/opt/agenpulsa/**` (binary, web, .env, service `agenpulsa-server.service` + `cloudflare-agenpulsa.service`)
+- DB runtime debian `/opt/agenpulsa/data/agenpulsa.db` (settings/katalog — via API atau SQL hati-hati)
+
+Lingkup TERLARANG (lapor saja, jangan edit):
+- `~/Documents/project/jhopanwabot/**` (project WA bot)
+- `~/Documents/project/PayPan/**` (server paypan — paypan jangan disentuh)
+- `~/Documents/project/TempMail*` / service tempmail (:8081 di debian)
+- Service systemd MILIK LAIN di debian (tempmail, paypan, vaultwarden, vpn, camofox, dsb) — gak boleh stop/edit/restart
+- VPS neva — sepenuhnya off-limits
+
 ## Status migrasi
 
 - Server core: SKELETON JALAN (order engine rod, queue, scheduler, API, web admin, webhook paypan).
