@@ -131,6 +131,7 @@ masalah terdeteksi di project lain:
 Lingkup aman (boleh edit):
 - Semua file di repo ini (`internal/`, `web/`, `helper/`, `main*.go`, `AGENTS.md`, `DEPLOY.md`)
 - Deploy target: `laptop-debian:/opt/agenpulsa/**` (binary, web, .env, service `agenpulsa-server.service` + `cloudflare-agenpulsa.service`)
+- **Staging**: `armbian-jhosua1:/opt/agenpulsa/**` (ARM64, port 8081, lokasi uji) — deploy pakai `./deploy.sh staging`; production (`./deploy.sh prod`) HANYA setelah user bilang deploy ke production
 - DB runtime debian `/opt/agenpulsa/data/agenpulsa.db` (settings/katalog — via API atau SQL hati-hati)
 
 Lingkup TERLARANG (lapor saja, jangan edit):
