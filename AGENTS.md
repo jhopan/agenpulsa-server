@@ -130,8 +130,18 @@ masalah terdeteksi di project lain:
 
 Lingkup aman (boleh edit):
 - Semua file di repo ini (`internal/`, `web/`, `helper/`, `main*.go`, `AGENTS.md`, `DEPLOY.md`)
-- Deploy target: `laptop-debian:/opt/agenpulsa/**` (binary, web, .env, service `agenpulsa-server.service` + `cloudflare-agenpulsa.service`)
-- **Staging**: `armbian-jhosua1:/opt/agenpulsa/**` (ARM64, port 8081, lokasi uji) — deploy pakai `./deploy.sh staging`; production (`./deploy.sh prod`) HANYA setelah user bilang deploy ke production
+
+### Target deploy — ATURAN WAJIB
+
+| Target | Host | Arsitektur | Port | Peran |
+|---|---|---|---|---|
+| **Staging** | `ssh armbian-jhosua1` (`192.168.11.23`) | ARM64 | 8081 | **Tempat pengujian** — semua perubahan diuji di sini dulu, bebas iterasi |
+| **Production** | `ssh laptop-debian` | AMD64 | 8082 | **Production** (`agenpulsa.jhopan.my.id`) — deploy **HANYA kalau user menyuruh** |
+
+- Deploy rutin / pengujian / iterasi → **staging armbian** (`./deploy.sh staging`).
+- Deploy ke **debian (production) HANYA** setelah user eksplisit bilang "deploy ke production" / "deploy ke debian". Jangan pernah auto-deploy ke production.
+- Service di masing-masing host: `agenpulsa-server.service` (DB `/opt/agenpulsa/data/agenpulsa.db`, profile `/opt/agenpulsa/profile`).
+- Service TAMBAHAN di debian (jangan tomper): `cloudflare-agenpulsa.service` (tunnel `agenpulsa.jhopan.my.id`).
 - DB runtime debian `/opt/agenpulsa/data/agenpulsa.db` (settings/katalog — via API atau SQL hati-hati)
 
 Lingkup TERLARANG (lapor saja, jangan edit):
