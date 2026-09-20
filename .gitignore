@@ -10,3 +10,5 @@ profile_debug/
 shot-*.png
 ui-*.png
 agenpulsa-server.exe~
+agenpulsa-server-linux-arm64
+agenpulsa-server-linux-amd64
