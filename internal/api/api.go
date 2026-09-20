@@ -236,6 +236,11 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/jadwal/{id}/toggle", a.auth(true, a.jadwalToggle))
 	mux.HandleFunc("DELETE /api/v1/jadwal/{id}", a.auth(true, a.jadwalDelete))
 
+	// Kontak pelanggan (nomor sering dipakai admin) — admin web.
+	mux.HandleFunc("GET /api/v1/contacts", a.auth(true, a.listContacts))
+	mux.HandleFunc("POST /api/v1/contacts", a.auth(true, a.simpanContact))
+	mux.HandleFunc("DELETE /api/v1/contacts/{nama}", a.auth(true, a.hapusContact))
+
 	// Langganan customer: set jadwal sendiri -> bayar -> jadwal aktif (publik).
 	mux.HandleFunc("POST /api/v1/langganan", a.langgananBaru)
 

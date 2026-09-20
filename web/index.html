@@ -211,8 +211,12 @@ small{color:#667085}
 <div id="beli-manual">
 <p><small>Pilih katalog, isi nomor tujuan, order langsung masuk queue (sumber: admin).</small></p>
 <div class="grid2">
-<div><label>Katalog</label><select id="mCatalog" style="width:100%"></select></div>
+<div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><select id="mKontak" style="width:100%" onchange="pakaiKontak('mKontak','mNomor')"><option value="">— pilih kontak —</option></select></div>
 <div><label>Nomor tujuan</label><input id="mNomor" style="width:100%" placeholder="08xxxxxxxxxx" onkeydown="if(event.key==='Enter')beliManual()"></div>
+</div>
+<div class="grid2">
+<div><label>Katalog</label><select id="mCatalog" style="width:100%"></select></div>
+<div></div>
 </div>
 <div class="btnrow">
 <button onclick="beliManual()">🛒 Beli Sekarang</button>
@@ -226,6 +230,7 @@ small{color:#667085}
 <div class="grid2">
 <div><label>Label</label><input id="jLabel" style="width:100%" placeholder="mis. Kuota harian jam 7"></div>
 <div><label>Katalog</label><select id="jCatalog" style="width:100%"></select></div>
+<div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><select id="jKontak" style="width:100%" onchange="pakaiKontak('jKontak','jNomor')"><option value="">— pilih kontak —</option></select></div>
 <div><label>Nomor tujuan</label><input id="jNomor" style="width:100%" placeholder="08xxxxxxxxxx"></div>
 <div><label>Tipe</label><select id="jTipe" style="width:100%" onchange="jTipeChange()">
 <option value="harian">Harian (tiap jam yang sama)</option>
@@ -240,6 +245,20 @@ small{color:#667085}
 <button onclick="jadwalAdd()">➕ Tambah Jadwal</button>
 </div>
 <p><small>Format jam: HH:MM 24 jam, WIB. Interval = beli tiap N hari pada jam yang ditentukan. Semua jadwal lewat guard yang sama (maintenance 23:40-00:35, harga naik, sesi login).</small></p>
+</div>
+<div class="card" style="box-shadow:none;border:1px solid #eee;margin-bottom:14px;padding:14px">
+<h2 style="font-size:14px">Kontak Pelanggan</h2>
+<div class="grid2">
+<div><label>Nama</label><input id="ktNama" style="width:100%" placeholder="mis. Bang Jho (0877...)" maxlength="80"></div>
+<div><label>Nomor</label><input id="ktNomor" style="width:100%" placeholder="08xxxxxxxxxx / 62xxx"></div>
+</div>
+<div class="btnrow" style="margin-top:10px">
+<button onclick="simpanKontak()">💾 Simpan Kontak</button>
+</div>
+<table id="kontakTbl">
+<tr><th>Nama</th><th>Nomor</th><th></th></tr>
+<tbody></tbody>
+</table>
 </div>
 <h2 style="font-size:14px">Daftar Jadwal</h2>
 <table id="jadwalTbl">
@@ -378,7 +397,50 @@ function beliModeChange(){
   const m=$('beliMode').value;
   $('beli-manual').style.display=m==='manual'?'block':'none';
   $('beli-jadwal').style.display=m==='jadwal'?'block':'none';
-  if(m==='jadwal')loadJadwal();
+  if(m==='jadwal'){loadJadwal();loadKontak()}
+}
+let kontakCache=[];
+async function loadKontak(){
+  try{
+    kontakCache=await api('/api/v1/contacts').catch(()=>[])||[];
+    for(const [sel,inpt] of [['mKontak','mNomor'],['jKontak','jNomor']]){
+      const s=$(sel);if(!s)continue;
+      const cur=s.value;
+      s.innerHTML='<option value="">— pilih kontak —</option>';
+      kontakCache.forEach(k=>{
+        s.insertAdjacentHTML('beforeend',`<option value="${esc(k.nama)}">${esc(k.nama)} (${esc(k.nomor)})</option>`);
+      });
+      s.value=cur;
+      // tombol kecil kelola kontak hanya di form manual (biar ringkas)
+    }
+    isiKontakTbl();
+  }catch(e){}
+}
+function isiKontakTbl(){
+  const tb=document.querySelector('#kontakTbl tbody');if(!tb)return;
+  tb.innerHTML='';
+  if(!(kontakCache||[]).length){tb.innerHTML='<tr><td colspan="3" class="empty">Belum ada kontak</td></tr>';return}
+  kontakCache.forEach(k=>{
+    tb.insertAdjacentHTML('beforeend',`<tr><td>${esc(k.nama)}</td><td>${esc(k.nomor)}</td><td><button class="sec" style="padding:4px 8px;font-size:12px" onclick="kontakDel('${esc(k.nama).replace(/'/g,"\\'")}')">Hapus</button></td></tr>`);
+  });
+}
+function pakaiKontak(sel,inpt){
+  const k=(kontakCache||[]).find(x=>x.nama===$(sel).value);
+  if(k)$(inpt).value=k.nomor;
+}
+async function simpanKontak(){
+  const nama=$('ktNama').value.trim(),nomor=$('ktNomor').value.trim();
+  if(!nama||!nomor){flash('Isi nama + nomor',1);return}
+  try{
+    await api('/api/v1/contacts',{method:'POST',body:JSON.stringify({nama:nama,nomor:nomor})});
+    flash('Kontak disimpan: '+nama);
+    $('ktNama').value='';$('ktNomor').value='';
+    loadKontak();
+  }catch(e){flash(e.message,1)}
+}
+async function kontakDel(nama){
+  if(!confirm('Hapus kontak '+nama+'?'))return;
+  try{await api('/api/v1/contacts/'+encodeURIComponent(nama),{method:'DELETE'});flash('Kontak dihapus');loadKontak()}catch(e){flash(e.message,1)}
 }
 function isiKatalogSelect(sel){
   sel.innerHTML='';
@@ -391,6 +453,7 @@ async function loadBeli(){
     katalogCache=await api('/api/v1/catalog')||[];
     isiKatalogSelect($('mCatalog'));isiKatalogSelect($('jCatalog'));
     loadJadwal();
+    loadKontak();
   }catch(e){flash(e.message,1)}
 }
 async function beliManual(){
