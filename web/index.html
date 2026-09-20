@@ -214,6 +214,12 @@ small{color:#667085}
 <div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><select id="mKontak" style="width:100%" onchange="pakaiKontak('mKontak','mNomor')"><option value="">— pilih kontak —</option></select></div>
 <div><label>Nomor tujuan</label><input id="mNomor" style="width:100%" placeholder="08xxxxxxxxxx" onkeydown="if(event.key==='Enter')beliManual()"></div>
 </div>
+<details style="margin:4px 0 10px"><summary style="cursor:pointer;font-size:13px;color:#667085">➕ Kontak baru (simpan biar next time tinggal pilih)</summary>
+<div class="grid2" style="margin-top:6px">
+<div><input id="mKtNama" style="width:100%" placeholder="Nama kontak (mis. Bang Jho)" maxlength="80"></div>
+<div style="display:flex;gap:6px"><input id="mKtNomor" style="width:100%" placeholder="Nomor baru (08xxx)" onkeydown="if(event.key==='Enter')tambahKontakCepat('mKtNama','mKtNomor','mKontak','mNomor')"><button class="sec" onclick="tambahKontakCepat('mKtNama','mKtNomor','mKontak','mNomor')">Simpan</button></div>
+</div>
+</details>
 <div class="grid2">
 <div><label>Katalog</label><select id="mCatalog" style="width:100%"></select></div>
 <div></div>
@@ -232,6 +238,12 @@ small{color:#667085}
 <div><label>Katalog</label><select id="jCatalog" style="width:100%"></select></div>
 <div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><select id="jKontak" style="width:100%" onchange="pakaiKontak('jKontak','jNomor')"><option value="">— pilih kontak —</option></select></div>
 <div><label>Nomor tujuan</label><input id="jNomor" style="width:100%" placeholder="08xxxxxxxxxx"></div>
+<div style="grid-column:1/-1"><details style="margin:2px 0"><summary style="cursor:pointer;font-size:13px;color:#667085">➕ Kontak baru (simpan biar next time tinggal pilih)</summary>
+<div class="grid2" style="margin-top:6px">
+<div><input id="jKtNama" style="width:100%" placeholder="Nama kontak (mis. Bang Jho)" maxlength="80"></div>
+<div style="display:flex;gap:6px"><input id="jKtNomor" style="width:100%" placeholder="Nomor baru (08xxx)" onkeydown="if(event.key==='Enter')tambahKontakCepat('jKtNama','jKtNomor','jKontak','jNomor')"><button class="sec" onclick="tambahKontakCepat('jKtNama','jKtNomor','jKontak','jNomor')">Simpan</button></div>
+</div>
+</details></div>
 <div><label>Tipe</label><select id="jTipe" style="width:100%" onchange="jTipeChange()">
 <option value="harian">Harian (tiap jam yang sama)</option>
 <option value="sekali">Sekali (tanggal+jam tertentu)</option>
@@ -423,6 +435,19 @@ function isiKontakTbl(){
   kontakCache.forEach(k=>{
     tb.insertAdjacentHTML('beforeend',`<tr><td>${esc(k.nama)}</td><td>${esc(k.nomor)}</td><td><button class="sec" style="padding:4px 8px;font-size:12px" onclick="kontakDel('${esc(k.nama).replace(/'/g,"\\'")}')">Hapus</button></td></tr>`);
   });
+}
+async function tambahKontakCepat(namaId,nomorId,selId,inptId){
+  const nama=$(namaId).value.trim(),nomor=$(nomorId).value.trim();
+  if(!nama||!nomor){flash('Isi nama + nomor kontak baru',1);return}
+  try{
+    await api('/api/v1/contacts',{method:'POST',body:JSON.stringify({nama:nama,nomor:nomor})});
+    flash('Kontak disimpan: '+nama);
+    $(namaId).value='';$(nomorId).value='';
+    await loadKontak();
+    // auto-pilih kontak baru + isi nomor
+    const s=$(selId);s.value=nama;
+    pakaiKontak(selId,inptId);
+  }catch(e){flash(e.message,1)}
 }
 function pakaiKontak(sel,inpt){
   const k=(kontakCache||[]).find(x=>x.nama===$(sel).value);
