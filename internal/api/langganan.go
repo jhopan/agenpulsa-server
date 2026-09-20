@@ -56,6 +56,10 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 	// validasi jadwal (pakai validator sama dengan admin)
 	// LANGGANAN CUSTOMER HANYA SEKALI JALAN — tanpa harian/interval
 	// (QRIS 1x bayar 1x jalan; berulang = ribet refund/expired)
+	req.Tipe = strings.TrimSpace(req.Tipe)
+	if req.Tipe == "" {
+		req.Tipe = "sekali" // default: bot lama/client yang gak kirim tipe
+	}
 	if req.Tipe != "sekali" {
 		jsonErr(w, 400, "pembelian terjadwal hanya sekali jalan (tanggal+jam). Tidak ada berulang.")
 		return

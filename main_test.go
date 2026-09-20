@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -203,5 +204,88 @@ func TestLoginSmoke(t *testing.T) {
 	_ = json.NewDecoder(r5.Body).Decode(&me2)
 	if me2.Admin {
 		t.Error("setelah logout harus admin=false")
+	}
+}
+
+
+// newTestServer: server API + DB sementara untuk test (dipakai beberapa test).
+func newTestServer(t *testing.T) (*httptest.Server, *db.Store, *engine.Engine) {
+	t.Helper()
+	store, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	eng, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { eng.Close() })
+	a := api.New(store, eng, testWebFS())
+	srv := httptest.NewServer(a.Routes())
+	t.Cleanup(srv.Close)
+	return srv, store, eng
+}
+
+// loginAdmin: login default admin/admin123, balikin cookie session.
+func loginAdmin(t *testing.T, srv *httptest.Server) *http.Cookie {
+	t.Helper()
+	r, err := http.Post(srv.URL+"/api/login", "application/json",
+		strings.NewReader(`{"username":"admin","password":"admin123"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.StatusCode != 200 {
+		t.Fatalf("login admin harus 200, got %d", r.StatusCode)
+	}
+	cookies := r.Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("harus ada cookie session")
+	}
+	return cookies[0]
+}
+
+// TestGuardJadwalMasaLalu: jadwal "sekali" bertanggal < hari ini (WIB) harus ditolak
+// di semua jalur (admin /api/v1/jadwal + customer /api/v1/langganan).
+func TestGuardJadwalMasaLalu(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	// seed katalog
+	it := db.CatalogItem{Label: "T", Tab: "Paket Kuota", Voucher: "1", HargaMax: 1000, HargaJual: 2000, Aktif: true}
+	id, err := store.UpsertCatalog(&it)
+	if err != nil {
+		t.Fatal(err)
+	}
+	login := loginAdmin(t, srv)
+
+	// tanggal kemarin (WIB)
+	kemarin := db.NowWIB().AddDate(0, 0, -1).Format("02/01/2006")
+	// tanggal besok
+	besok := db.NowWIB().AddDate(0, 0, 1).Format("02/01/2006")
+
+	// 1) admin jadwal: kemarin -> 400
+	body := fmt.Sprintf(`{"tipe":"sekali","label":"tes","catalog_id":%d,"nomor":"081234567890","jam":"%s 07:00"}`, id, kemarin)
+	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/jadwal", strings.NewReader(body))
+	req.AddCookie(login)
+	res, _ := http.DefaultClient.Do(req)
+	if res.StatusCode != 400 {
+		t.Errorf("jadwal kemarin harus 400, got %d", res.StatusCode)
+	}
+
+	// 2) admin jadwal: besok -> 200
+	body = fmt.Sprintf(`{"tipe":"sekali","label":"tes","catalog_id":%d,"nomor":"081234567890","jam":"%s 07:00"}`, id, besok)
+	req, _ = http.NewRequest("POST", srv.URL+"/api/v1/jadwal", strings.NewReader(body))
+	req.AddCookie(login)
+	res, _ = http.DefaultClient.Do(req)
+	if res.StatusCode != 200 {
+		t.Errorf("jadwal besok harus 200, got %d", res.StatusCode)
+	}
+
+	// 3) langganan customer: kemarin -> 400 (invoice belum dibuat)
+	body = fmt.Sprintf(`{"catalog_id":%d,"nomor":"081234567890","tanggal":"%s","jam":"07:00"}`, id, kemarin)
+	res, _ = http.DefaultClient.Post(srv.URL+"/api/v1/langganan", "application/json", strings.NewReader(body))
+	if res.StatusCode != 400 {
+		t.Errorf("langganan kemarin harus 400, got %d", res.StatusCode)
 	}
 }

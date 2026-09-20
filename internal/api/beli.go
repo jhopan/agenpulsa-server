@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
@@ -97,6 +98,14 @@ func validJadwal(req *jadwalReq) error {
 	case "sekali":
 		if !reOnce.MatchString(req.Jam) {
 			return fmt.Errorf("jam sekali format DD/MM/YYYY HH:MM (mis. 22/08/2026 00:00)")
+		}
+		// guard: tanggal jadwal tidak boleh di masa lalu (mulai hari ini WIB).
+		// Berlaku utk semua sumber (bot TG/WA/API) — jadwal kemarin langsung ditolak.
+		if t, err := time.ParseInLocation("02/01/2006 15:04", req.Jam, db.WIBLoc()); err == nil {
+			today := db.NowWIB().Truncate(24 * time.Hour)
+			if t.Before(today) {
+				return fmt.Errorf("tanggal jadwal %s sudah lewat — minimal hari ini (WIB)", req.Jam[:10])
+			}
 		}
 	case "interval":
 		if req.Interval < 1 {
