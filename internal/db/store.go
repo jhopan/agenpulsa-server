@@ -140,6 +140,16 @@ type Order struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+// DeadlineUnix: batas akhir bayar order = dibuat + 5 menit (WIB).
+// Dipakai expire pending: lewat batas ini order dianggap expired.
+func (o *Order) DeadlineUnix() int64 {
+	created, err := time.ParseInLocation("2006-01-02 15:04:05", o.CreatedAt, WIBLoc())
+	if err != nil {
+		return 0 // timestamp gak valid -> jangan expire (biar aman)
+	}
+	return created.Add(5 * time.Minute).Unix()
+}
+
 const orderCols = "id,COALESCE(ref,''),COALESCE(nomor,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),COALESCE(expires_at,0),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
 
 func scanOrder(sc interface{ Scan(...any) error }) (*Order, error) {

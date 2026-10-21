@@ -372,3 +372,39 @@ func TestExpirePendingLokal(t *testing.T) {
 	}
 	_ = srv
 }
+
+// TestExpireBatas5Menit: order tepat 5 menit -> expired; order < 5 menit -> belum.
+func TestExpireBatas5Menit(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	mk := func(ref string, ageMin int) int64 {
+		created := db.NowWIB().Add(-time.Duration(ageMin) * time.Minute)
+		o := &db.Order{
+			Ref: ref, Nomor: "081234567890", Label: "T",
+			Status: "pending_payment", Sumber: "api",
+			CreatedAt: created.Format("2006-01-02 15:04:05"),
+			UpdatedAt: created.Format("2006-01-02 15:04:05"),
+		}
+		id, err := store.CreateOrder(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+
+	lewat := mk("exp-5m", 6)   // 6 menit -> harus expired
+	dekat := mk("exp-4m", 4)   // 4 menit -> masih pending
+
+	a := api.New(store, mustEngine(t, store), testWebFS())
+	a.ExpirePendingForTest()
+
+	g1, _ := store.GetOrder(lewat)
+	if g1.Status != "failed" {
+		t.Errorf("order 6 menit harus failed, dapat %q", g1.Status)
+	}
+	g2, _ := store.GetOrder(dekat)
+	if g2.Status != "pending_payment" {
+		t.Errorf("order 4 menit harus pending_payment, dapat %q", g2.Status)
+	}
+}

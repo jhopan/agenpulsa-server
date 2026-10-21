@@ -4,8 +4,9 @@ package engine
 
 import (
 	"encoding/json"
-	"log"
 	"fmt"
+	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -40,9 +41,21 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 			py = "python"
 		}
 	}
+	// Cari helper: dulu relatif ke CWD, lalu relatif ke binary (deploy systemd
+	// WorkingDirectory=/opt/agenpulsa -> helper/ ada, tapi LookPath ga cek path
+	// relatif karena bukan PATH -> harus cek file langsung).
 	helper := filepath.Join("helper", "isip_api.py")
-	if _, err := exec.LookPath(helper); err != nil {
-		helper = "isip_api.py"
+	if _, err := os.Stat(helper); err != nil {
+		if exe, err := os.Executable(); err == nil {
+			cand := filepath.Join(filepath.Dir(exe), "helper", "isip_api.py")
+			if _, err := os.Stat(cand); err == nil {
+				helper = cand
+			} else {
+				helper = "isip_api.py"
+			}
+		} else {
+			helper = "isip_api.py"
+		}
 	}
 	full := append([]string{helper}, args...) // subcommand dulu, --profile sesudahnya
 	cmd := exec.Command(py, full...)

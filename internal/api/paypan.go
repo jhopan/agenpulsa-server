@@ -78,7 +78,8 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 		// Exception: order gagal karena invoice expired lokal, TAPI paypan
 		// baru nyampe "paid" (notif telat). Customer udah bayar — proses
 		// lagi, jangan diamkan.
-		if o.Status == "failed" && strings.Contains(o.Pesan, "invoice expired") {
+		if o.Status == "failed" && (strings.Contains(o.Pesan, "expired") ||
+			strings.Contains(o.Pesan, "tidak dibayar")) {
 			log.Printf("[WEBHOOK] order #%d dibayar terlambat (expiry lokal) -> diproses ulang", o.ID)
 			_ = a.store.UpdateOrderStatus(o.ID, "pending_payment", "", "")
 			o.Status = "pending_payment"
