@@ -135,7 +135,7 @@ Lingkup aman (boleh edit):
 
 | Target | Host | Arsitektur | Port | Peran |
 |---|---|---|---|---|
-| **Staging** | `ssh armbian-jhosua1` (`192.168.11.23`) | ARM64 | 8081 | **Tempat pengujian** — semua perubahan diuji di sini dulu, bebas iterasi |
+| **Staging** | `ssh root@192.168.10.22` (host alias `armbian-jhosua`) | ARM64 | 8081 | **Tempat pengujian** — semua perubahan diuji di sini dulu, bebas iterasi |
 | **Production** | `ssh laptop-debian` | AMD64 | 8082 | **Production** (`agenpulsa.jhopan.my.id`) — deploy **HANYA kalau user menyuruh** |
 
 - Deploy rutin / pengujian / iterasi → **staging armbian** (`./deploy.sh staging`).

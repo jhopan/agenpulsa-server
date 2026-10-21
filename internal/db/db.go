@@ -39,6 +39,9 @@ func Open(path string) (*Store, error) {
 	// Migrasi ringan DB lama: kolom invoice_id (paypan), operator (guard provider).
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN invoice_id TEXT")
 	_, _ = d.Exec("ALTER TABLE catalog ADD COLUMN operator TEXT")
+	// expires_at: deadline bayar invoice (unix) — biar order pending bisa
+	// di-expire lokal 5 menit tanpa nunggu Paypan.
+	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0")
 	return &Store{DB: d}, nil
 }
 

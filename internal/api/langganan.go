@@ -102,6 +102,7 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 		HargaJual:   it.HargaJual,
 		Status:      "pending_payment",
 		InvoiceID:   inv.ID,
+		ExpiresAt:   inv.ExpiresAt, // deadline bayar (unix) — expire lokal 5 menit
 		Sumber:      "langganan",
 		ChatID:      req.ChatID,
 		CallbackURL: req.Callback,

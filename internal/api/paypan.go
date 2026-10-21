@@ -10,7 +10,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 )
 
 type paypanOrder struct {
@@ -73,8 +75,17 @@ func (a *API) paypanWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Idempotensi: webhook dobel / order sudah diproses -> ok (paypan berhenti retry).
 	if o.Status != "pending_payment" {
-		writeJSON(w, 200, map[string]any{"ok": true, "status": o.Status})
-		return
+		// Exception: order gagal karena invoice expired lokal, TAPI paypan
+		// baru nyampe "paid" (notif telat). Customer udah bayar — proses
+		// lagi, jangan diamkan.
+		if o.Status == "failed" && strings.Contains(o.Pesan, "invoice expired") {
+			log.Printf("[WEBHOOK] order #%d dibayar terlambat (expiry lokal) -> diproses ulang", o.ID)
+			_ = a.store.UpdateOrderStatus(o.ID, "pending_payment", "", "")
+			o.Status = "pending_payment"
+		} else {
+			writeJSON(w, 200, map[string]any{"ok": true, "status": o.Status})
+			return
+		}
 	}
 
 	a.terimaPembayaran(o, ev.Order.Total)

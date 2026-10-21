@@ -68,26 +68,78 @@ func formatOrderNotif(o *db.Order, status, pesan string) string {
 // StartReconcile jalankan loop rekonsiliasi order pending_payment (goroutine).
 // Webhook bisa hilang (firewall/retry habis) — polling ke Paypan jamin order
 // gak nyangkut: paid -> proses, expired -> failed.
+//
+// JANGAN cek ppCfg di sini: config paypan itu live dari settings DB, jadi
+// Enabled() hanya relevan kalo env/DB bener-bener kosong. Cek per-tick
+// (liveCfg) supaya loop tetap hidup walau paypan disetel belakangan.
 func (a *API) StartReconcile() {
-	if !a.ppCfg.Enabled() {
-		return
-	}
 	go func() {
 		for {
 			a.reconcileOnce()
-			time.Sleep(60 * time.Second)
+			time.Sleep(15 * time.Second)
 		}
 	}()
 }
 
 const pendingGrace = 7 * time.Minute // invoice expired 5 menit + buffer webhook retry
 
-func (a *API) reconcileOnce() {
+// expirePending: order yang lewat deadline bayar (5 menit) -> failed.
+// PENTING: cek Paypan DULU sebelum expire — kalau ternyata sudah "paid"
+// (notif telat / webhook hilang), order diproses, bukan dibuang.
+func (a *API) expirePending(now time.Time) {
 	pending, err := a.store.ListOrders("pending_payment", 200)
 	if err != nil {
 		return
 	}
-	cutoff := time.Now().Add(-pendingGrace)
+	for _, o := range pending {
+		deadline := o.ExpiresAt
+		if deadline == 0 {
+			// order lama tanpa expires_at: pakai created_at + window bayar 5 menit
+			created, err := time.ParseInLocation("2006-01-02 15:04:05", o.CreatedAt, db.WIBLoc())
+			if err != nil {
+				continue
+			}
+			deadline = created.Add(5 * time.Minute).Unix()
+		}
+		if now.Unix() < deadline {
+			continue // masih dalam masa bayar
+		}
+		// pastikan bener-bener belum dibayar
+		if o.InvoiceID != "" {
+			inv, err := a.ppClient.GetInvoice(a.store, o.InvoiceID)
+			if err != nil {
+				continue // paypan gak bisa dihubungi — jangan asal expire
+			}
+			if inv.Status == "paid" {
+				a.terimaPembayaran(o, inv.Total)
+				continue
+			}
+			if inv.Status == "pending" {
+				// paypan masih anggap pending (notif belum masuk) — tunggu 1 tick lagi
+				continue
+			}
+		}
+		_ = a.store.UpdateOrderStatus(o.ID, "failed",
+			"invoice expired (tidak dibayar dalam 5 menit) — silakan buat order baru", "")
+		log.Printf("[EXPIRE] order #%d (ref %s) invoice kedaluwarsa -> failed", o.ID, o.Ref)
+	}
+}
+
+// ExpirePendingForTest: ekspos expirePending buat test (tanpa start loop).
+func (a *API) ExpirePendingForTest() { a.expirePending(time.Now()) }
+
+func (a *API) reconcileOnce() {
+	now := time.Now()
+
+	// 1) expire lokal dulu (cepat, tanpa bergantung Paypan)
+	a.expirePending(now)
+
+	// 2) cek ke Paypan untuk order yang belum expired
+	pending, err := a.store.ListOrders("pending_payment", 200)
+	if err != nil {
+		return
+	}
+	cutoff := now.Add(-pendingGrace)
 	for _, o := range pending {
 		if o.CreatedAt == "" {
 			continue
@@ -488,6 +540,7 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o.InvoiceID = inv.ID
+	o.ExpiresAt = inv.ExpiresAt // deadline bayar (unix) — expire lokal 5 menit
 	o.Status = "pending_payment"
 	if err := a.eng.Enqueue(o); err != nil { // simpan row (status pending, worker skip)
 		jsonErr(w, 500, err.Error())

@@ -9,84 +9,54 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 *{box-sizing:border-box}
-body{font-family:system-ui;background:#f2f4f8;margin:0}
+:root{--ink:#14213d;--ink-soft:#263653;--canvas:#f6f8fb;--surface:#fff;--line:#dfe5ee;--muted:#65748a;--accent:#16803c;--accent-dark:#0f662e;--danger:#b42318;--danger-bg:#fff0ef;--focus:rgba(22,128,60,.24)}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--canvas);color:var(--ink);margin:0;line-height:1.45}
+button,input,select,textarea{font:inherit}
 .layout{display:flex;min-height:100vh}
-.sidebar{width:230px;background:#101828;color:#cbd5e1;padding:18px 14px;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
-.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 20px;border-bottom:1px solid #1e293b;margin-bottom:14px}
-.brand .dot{width:36px;height:36px;border-radius:10px;background:#1a7f37;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex-shrink:0}
-.brand b{color:#fff;font-size:16px;display:block;line-height:1.1}
-.brand small{color:#64748b;font-size:11px}
-.menu a{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;color:#cbd5e1;text-decoration:none;font-size:14px;font-weight:500;margin-bottom:4px;cursor:pointer}
-.menu a:hover{background:#1e293b;color:#fff}
-.menu a.on{background:#1a7f37;color:#fff;font-weight:600}
-.menu .ico{width:20px;text-align:center;flex-shrink:0}
-.sidebar .foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid #1e293b;font-size:12px;color:#64748b}
-.main{margin-left:230px;flex:1;min-width:0}
-header{background:#fff;border-bottom:1px solid #e4e7ec;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
-header h1{font-size:18px;margin:0;color:#101828}
-header .right{display:flex;align-items:center;gap:14px}
-header .who{font-size:13px;color:#667085}
-header .out{color:#b42318;text-decoration:none;font-size:13px;font-weight:600;padding:7px 14px;border:1px solid #fda29b;border-radius:8px;cursor:pointer;background:#fff}
-header .out:hover{background:#fee4e2}
-.content{max-width:980px;margin:24px auto;padding:0 24px}
-.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 6px rgba(0,0,0,.06)}
-h2{margin:0 0 12px;font-size:16px;color:#101828}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
-th{color:#667085;font-weight:600;background:#f9fafb}
+.sidebar{width:248px;background:var(--ink);color:#c9d4e4;padding:20px 14px;display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:20}
+.brand{display:flex;align-items:center;gap:11px;padding:4px 10px 19px;border-bottom:1px solid rgba(255,255,255,.13);margin-bottom:16px}
+.brand b{color:#fff;font-size:16px;display:block;line-height:1.1}.brand small{color:#94a3b8;font-size:11px}
+.menu a{display:flex;align-items:center;gap:11px;min-height:44px;padding:10px 12px;border-radius:9px;color:#c9d4e4;text-decoration:none;font-size:14px;font-weight:600;margin-bottom:3px;cursor:pointer;position:relative}
+.menu a:hover{background:rgba(255,255,255,.09);color:#fff}.menu a.on{background:#1e5c38;color:#fff}.menu a.on::before{content:"";width:3px;height:22px;border-radius:3px;background:#7fe1a4;position:absolute;left:0}
+.menu .ico{width:20px;text-align:center;flex-shrink:0}.sidebar .foot{margin-top:auto;padding:14px 10px 0;border-top:1px solid rgba(255,255,255,.13);font-size:12px;color:#94a3b8}
+.main{margin-left:248px;flex:1;min-width:0}header{background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);padding:16px 32px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10;backdrop-filter:blur(8px)}
+header h1{font-size:20px;letter-spacing:-.02em;margin:0;color:var(--ink)}header .right{display:flex;align-items:center;gap:14px}header .who{font-size:13px;color:var(--muted)}
+header .out{color:var(--danger);text-decoration:none;font-size:13px;font-weight:700;padding:8px 13px;border:1px solid #f5b5af;border-radius:9px;cursor:pointer;background:#fff}header .out:hover{background:var(--danger-bg)}
+.menu-toggle{display:none;color:var(--ink);background:#fff;border:1px solid var(--line);width:42px;height:42px;padding:0;font-size:18px}.nav-scrim{display:none}.content{max-width:1120px;margin:28px auto;padding:0 28px 40px}.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:20px;box-shadow:none}h2{margin:0 0 14px;font-size:16px;letter-spacing:-.01em;color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:11px 12px;border-bottom:1px solid #e8edf3;text-align:left;vertical-align:middle}th{color:#526176;font-size:12px;font-weight:700;background:#f8fafc}tbody tr:hover{background:#f8fbf9}
 /* order history: kartu melebar penuh + pesan panjang wrap memanjang ke bawah */
 #orders td:last-child{max-width:420px;word-break:break-word;white-space:normal;overflow-wrap:anywhere}
 .tblwrap{overflow-x:auto}
-td.empty{text-align:center;color:#98a2b3;padding:18px}
-td small{color:#98a2b3;font-size:12px;white-space:nowrap}
-.money{font-variant-numeric:tabular-nums;text-align:right}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-.stat{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.06);text-align:center;cursor:pointer}
-.stat:hover{box-shadow:0 2px 10px rgba(0,0,0,.12)}
-.stat .n{font-size:26px;font-weight:800;color:#101828;font-variant-numeric:tabular-nums}
-.stat .l{font-size:12px;color:#667085;margin-top:2px}
-.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
-.success{background:#d4edda;color:#186a3b}
-.failed,.cancelled{background:#f8d7da;color:#8a1c1c}
-.queued,.running,.pending_payment{background:#fff3cd;color:#8a6d00}
-input,select,textarea{padding:8px;border:1px solid #d0d5dd;border-radius:8px;margin:4px 0;font-size:14px}
-input:focus,select:focus,textarea:focus{outline:2px solid #1a7f37;border-color:#1a7f37}
-button{padding:8px 14px;background:#1a7f37;color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
-button:hover{background:#166f30}
-button.del{background:#b42318}button.del:hover{background:#912018}
-button.sec{background:#fff;color:#344054;border:1px solid #d0d5dd}button.sec:hover{background:#f9fafb}
-button.big{padding:11px 18px;font-size:14px;width:100%}
-label{font-size:13px;color:#344054;font-weight:600;display:block;margin:10px 0 4px}
-small{color:#667085}
-.flash{background:#d4edda;color:#186a3b;padding:10px 14px;border-radius:8px;margin-bottom:14px}
-.flash.err{background:#fee4e2;color:#b42318}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
-@media(max-width:700px){.grid2{grid-template-columns:1fr}}
-@media(max-width:800px){.sidebar{display:none}.main{margin-left:0}}
-.tab{display:none}.tab.on{display:block}
-.kv{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:14px}
-.kv b{color:#101828}
-.btnrow{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
-.btnrow button{flex:1;min-width:150px}
+td.empty{text-align:center;color:#8290a4;padding:22px}td small{color:#718096;font-size:12px;white-space:nowrap}.money{font-variant-numeric:tabular-nums;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px;margin-bottom:22px}.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:17px;text-align:left;cursor:pointer}.stat:hover{border-color:#b9c8bd;box-shadow:0 5px 14px rgba(20,33,61,.07)}.stat .n{font-size:24px;font-weight:800;letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}.stat .l{font-size:12px;color:var(--muted);margin-top:4px}
+.badge{display:inline-block;padding:3px 9px;border-radius:7px;font-size:12px;font-weight:700}.success{background:#ddf5e5;color:#126b32}.failed,.cancelled{background:#fee4e2;color:#9d1c16}.queued,.running,.pending_payment{background:#fff5d8;color:#825d00}
+input,select,textarea{width:100%;min-height:40px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px;margin:4px 0;font-size:14px;background:#fff;color:var(--ink)}input:focus,select:focus,textarea:focus,button:focus-visible,.menu a:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-color:var(--accent)}
+button{min-height:40px;padding:8px 14px;background:var(--accent);color:#fff;border:0;border-radius:9px;cursor:pointer;font-weight:700;font-size:13px}button:hover{background:var(--accent-dark)}button:disabled{cursor:not-allowed;opacity:.65}button.del{background:var(--danger)}button.del:hover{background:#912018}button.sec{background:#fff;color:#344054;border:1px solid #cbd5e1}button.sec:hover{background:#f8fafc}button.big{padding:11px 18px;font-size:14px;width:100%}
+label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4px}small{color:var(--muted)}.flash{background:#ddf5e5;color:#126b32;padding:11px 14px;border-radius:9px;margin-bottom:16px;border:1px solid #b7e3c4}.flash.err{background:var(--danger-bg);color:var(--danger);border-color:#f5b5af}.save-status,.action-status{min-height:20px;margin:9px 2px 0;font-size:13px;font-weight:700;color:var(--muted)}.save-status.ok,.action-status.ok{color:#126b32}.save-status.err,.action-status.err{color:var(--danger)}.attention{border-left:3px solid #d8a21a}.attention-list{display:grid;gap:8px}.attention-item{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e8edf3;font-size:13px}.attention-item:last-child{border:0}.attention-item small{white-space:normal;text-align:right}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
++dialog{width:min(560px,calc(100% - 28px));padding:0;border:1px solid var(--line);border-radius:14px;color:var(--ink);box-shadow:0 20px 56px rgba(20,33,61,.24)}dialog::backdrop{background:rgba(20,33,61,.48)}.dialog-head{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line)}.dialog-head h2{margin:0}.dialog-close{width:40px;min-width:40px;padding:0;background:#fff;color:var(--ink);border:1px solid var(--line);font-size:20px}.dialog-body{padding:18px 20px}.dialog-body ol{margin:0;padding-left:21px}.dialog-body li{padding:0 0 12px}.dialog-body li:last-child{padding-bottom:0}.dialog-body strong{display:block;margin-bottom:2px}
+.tab{display:none}.tab.on{display:block}.kv{display:flex;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid #e8edf3;font-size:14px}.kv b{color:var(--ink)}.btnrow{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.btnrow button{flex:1;min-width:150px}
+@media(max-width:900px){.sidebar{transform:translateX(-100%);transition:transform .18s ease;box-shadow:8px 0 24px rgba(20,33,61,.2)}.sidebar.open{transform:translateX(0)}.main{margin-left:0}.menu-toggle{display:inline-flex;align-items:center;justify-content:center}.nav-scrim.open{display:block;position:fixed;inset:0;background:rgba(20,33,61,.4);z-index:15}.content{padding:0 20px 32px}header{padding:13px 20px;gap:12px}header .right{margin-left:auto}}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.content{margin:20px auto;padding:0 14px 28px}.card{padding:16px;border-radius:12px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat{padding:14px}.stat .n{font-size:20px}header h1{font-size:18px}header .who{display:none}.btnrow button{min-width:0}.attention-item{flex-direction:column;gap:5px}.attention-item small{text-align:left}table{display:block;overflow:visible}table tr{display:block;border:1px solid var(--line);border-radius:10px;margin:10px 0;padding:8px;background:#fff}table tr:first-child{display:none}table td{display:flex;justify-content:space-between;gap:12px;border:0;padding:7px 3px;text-align:right}table td::before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:700;text-align:left}table td.empty{display:block;text-align:center}table td.empty::before{display:none}.money{justify-content:space-between}.kv{align-items:flex-start;flex-direction:column;gap:3px}}
 </style>
 </head>
 <body>
 <div class="layout">
-<div class="sidebar">
-<div class="brand"><img src="/logo_agenpulsa_server.png" alt="AgenPulsa" style="width:36px;height:36px;border-radius:10px;flex-shrink:0"><div><b>AgenPulsa</b><small>by JhopanStore</small></div></div>
-<div class="menu">
-<a data-tab="dash" class="on"><span class="ico">▤</span> Dashboard</a>
-<a data-tab="akun"><span class="ico">◉</span> Akun Login</a>
-<a data-tab="katalog"><span class="ico">▦</span> Katalog</a>
-<a data-tab="beli"><span class="ico">🛒</span> Pembelian</a>
-<a data-tab="laporan"><span class="ico">☰</span> Laporan</a>
-<a data-tab="set"><span class="ico">⚙</span> Pengaturan</a>
-</div>
+<div class="nav-scrim" id="navScrim"></div>
+<aside class="sidebar" id="sidebar" aria-label="Navigasi admin">
+<div class="brand"><img src="/logo_agenpulsa_server.png" alt="AgenPulsa" style="width:36px;height:36px;border-radius:10px;flex-shrink:0"><div><b>AgenPulsa Admin</b><small>by JhopanStore</small></div></div>
+<nav class="menu" aria-label="Menu utama">
+<a href="#dashboard" data-tab="dash" class="on"><span class="ico" aria-hidden="true">▤</span> Dashboard</a>
+<a href="#akun" data-tab="akun"><span class="ico" aria-hidden="true">◉</span> Akun Login</a>
+<a href="#katalog" data-tab="katalog"><span class="ico" aria-hidden="true">▦</span> Katalog</a>
+<a href="#pembelian" data-tab="beli"><span class="ico" aria-hidden="true">🛒</span> Pembelian</a>
+<a href="#laporan" data-tab="laporan"><span class="ico" aria-hidden="true">☰</span> Laporan</a>
+<a href="#pengaturan" data-tab="set"><span class="ico" aria-hidden="true">⚙</span> Pengaturan</a>
+</nav>
 <div class="foot">v1.1 · JhopanStore</div>
-</div>
+</aside>
 <div class="main">
-<header><h1 id="judul">Dashboard</h1>
-<div class="right"><span class="who" id="wib">—</span><button class="out" id="logout">Logout</button></div></header>
+<header><button class="menu-toggle" id="menuToggle" type="button" aria-label="Buka menu" aria-expanded="false">☰</button><h1 id="judul">Dashboard</h1>
+<div class="right"><span class="who" id="wib">-</span><button class="out" id="logout">Logout</button></div></header>
 <div class="content">
 <div id="flash" class="flash" style="display:none"></div>
 
@@ -100,6 +70,7 @@ small{color:#667085}
 <div class="stat"><div class="n" id="rProfit">-</div><div class="l">Profit</div></div>
 <div class="stat"><div class="n" id="rModal">-</div><div class="l">Modal</div></div>
 </div>
+<div class="card attention"><h2>Perlu perhatian</h2><div id="attentionList" class="attention-list">Memuat order...</div></div>
 <div class="card"><h2>Order terakhir
 <span style="float:right;font-size:12px">
 <button class="sec" style="padding:5px 10px;font-size:12px" onclick="hapusHistory('failed')">🗑 Hapus Failed</button>
@@ -124,14 +95,15 @@ small{color:#667085}
 <div id="akCookieWarn" style="display:none;color:#8a6d00;background:#fff3cd;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px"></div>
 <div class="btnrow">
 <button id="btnCek" onclick="cekAkun()">↻ Cek Status</button>
-<button id="btnGanti" class="del" onclick="hapusAkun()">🗑 Hapus Akun (profil + cookies)</button>
+<button id="btnGanti" class="del" onclick="hapusAkun()">🗑 Hapus Akun</button>
 </div>
-<p><small>Hapus Akun: bersihkan semua cookies/sesi isipulsa dari server. Setelah itu tinggal inject cookies akun baru.</small></p>
 </div>
 
 <div class="card">
 <h2>Login via Cookies <span class="badge success">paling gampang</span></h2>
-<p><small>Login isipulsa di HP/PC sendiri → pasang ekstensi <b>Cookie-Editor</b> → buka isipulsa.web.id → tombol <b>Export</b> di ekstensi → upload file hasil export ATAU paste di bawah → Inject. Cookie disimpan permanen ke profile server, worker langsung pakai.</small></p>
+<div class="btnrow" style="margin-top:0">
+<button class="sec" type="button" onclick="bukaPanduanCookies()">Cara dapatkan cookies</button>
+</div>
 <div class="row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
 <input type="file" id="cFile" accept=".json,application/json" style="padding:6px;width:auto">
 <button class="sec" onclick="uploadCookieFile()">📤 Upload File</button>
@@ -139,8 +111,9 @@ small{color:#667085}
 <p style="margin:0 0 6px"><small>atau paste manual:</small></p>
 <textarea id="cCookies" rows="6" style="width:100%;font-family:monospace;font-size:12px;padding:8px" placeholder='[{"name":"session","value":"...","domain":".isipulsa.web.id"}, ...]'></textarea>
 <div class="btnrow" style="margin-top:10px">
-<button onclick="importCookies()">📥 Inject Cookies</button>
+<button id="cookieInjectButton" onclick="importCookies()">📥 Inject Cookies</button>
 </div>
+<div id="cookieInjectStatus" class="action-status" role="status" aria-live="polite"></div>
 </div>
 
 <div class="card">
@@ -176,16 +149,17 @@ small{color:#667085}
 <div><label>Label / nama jualan (bebas)</label><input id="kLabel" style="width:100%" placeholder="Masa Aktif XL 1 Bulan + Bonus Game"></div>
 <div><label>Produk (tab isipulsa)</label><input id="kTab" style="width:100%" value="Paket Kuota" placeholder="Paket Kuota / Pulsa"></div>
 <div><label>Voucher ID (jangan diubah)</label><input id="kVoucher" style="width:100%" placeholder="misal: 10137"></div>
-<div><label>Nama asli isipulsa (jangan diubah — verifikasi order)</label><input id="kCari" style="width:100%" placeholder="misal: Kuota Ketengan Ilmupedia 22GB, 7 hari"></div>
-<div><label>Provider (operator paket — dari isipulsa, jangan diubah)</label><input id="kOperator" style="width:100%" placeholder="misal: Telkomsel (Ilmupedia)"><div><small style="color:#667085">Dipakai guard: nomor user dicek sebelum order — XL masuk paket Telkomsel = dibatalkan otomatis.</small></div></div>
+<div><label>Nama asli isipulsa (jangan diubah - verifikasi order)</label><input id="kCari" style="width:100%" placeholder="misal: Kuota Ketengan Ilmupedia 22GB, 7 hari"></div>
+<div><label>Provider (operator paket - dari isipulsa, jangan diubah)</label><input id="kOperator" style="width:100%" placeholder="misal: Telkomsel (Ilmupedia)"><div><small style="color:#667085">Dipakai guard: nomor user dicek sebelum order - XL masuk paket Telkomsel = dibatalkan otomatis.</small></div></div>
 <div><label>Harga modal (dari isipulsa)</label><input id="kMax" type="number" style="width:100%" placeholder="13749"></div>
 <div><label>Harga jual</label><input id="kJual" type="number" style="width:100%" placeholder="16000"></div>
 </div>
 <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="kAktif" checked style="width:auto"> Aktif</label>
 <div class="btnrow">
-<button onclick="simpanKatalog()">💾 Simpan</button>
+<button id="catalogSaveButton" onclick="simpanKatalog()">💾 Simpan</button>
 <button class="sec" onclick="resetForm()">Bersihkan Form</button>
 </div>
+<div id="catalogSaveStatus" class="action-status" role="status" aria-live="polite"></div>
 </div>
 <div class="card">
 <h2>Daftar Katalog</h2>
@@ -193,7 +167,7 @@ small{color:#667085}
 <tr><th>#</th><th>Label</th><th>Tab</th><th>Voucher</th><th>Provider</th><th class="money">Modal</th><th class="money">Harga Jual</th><th></th></tr>
 <tbody></tbody>
 </table>
-<p><small>Klik <b>Edit</b> untuk mengubah — data masuk ke form atas.</small></p>
+<p><small>Klik <b>Edit</b> untuk mengubah - data masuk ke form atas.</small></p>
 </div>
 </div>
 
@@ -211,7 +185,7 @@ small{color:#667085}
 <div id="beli-manual">
 <p><small>Pilih katalog, isi nomor tujuan, order langsung masuk queue (sumber: admin).</small></p>
 <div class="grid2">
-<div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><div style="display:flex;gap:6px"><select id="mKontak" style="width:100%" onchange="pakaiKontak('mKontak','mNomor')"><option value="">— pilih kontak —</option></select><button class="sec" style="padding:6px 10px;font-size:13px" onclick="hapusKontakPilih('mKontak','mNomor')" title="Hapus kontak terpilih">🗑</button></div></div>
+<div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><div style="display:flex;gap:6px"><select id="mKontak" style="width:100%" onchange="pakaiKontak('mKontak','mNomor')"><option value="">- pilih kontak -</option></select><button class="sec" style="padding:6px 10px;font-size:13px" onclick="hapusKontakPilih('mKontak','mNomor')" title="Hapus kontak terpilih">🗑</button></div></div>
 <div><label>Nomor tujuan</label><input id="mNomor" style="width:100%" placeholder="08xxxxxxxxxx" onkeydown="if(event.key==='Enter')beliManual()"></div>
 </div>
 <details style="margin:4px 0 10px"><summary style="cursor:pointer;font-size:13px;color:#667085">➕ Kontak baru (simpan biar next time tinggal pilih)</summary>
@@ -225,8 +199,9 @@ small{color:#667085}
 <div></div>
 </div>
 <div class="btnrow">
-<button onclick="beliManual()">🛒 Beli Sekarang</button>
+<button id="mBuyButton" onclick="beliManual()">🛒 Beli Sekarang</button>
 </div>
+<div id="mBuyStatus" class="action-status" role="status" aria-live="polite"></div>
 </div>
 
 <!-- jadwal -->
@@ -236,7 +211,7 @@ small{color:#667085}
 <div class="grid2">
 <div><label>Label</label><input id="jLabel" style="width:100%" placeholder="mis. Kuota harian jam 7"></div>
 <div><label>Katalog</label><select id="jCatalog" style="width:100%"></select></div>
-<div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><div style="display:flex;gap:6px"><select id="jKontak" style="width:100%" onchange="pakaiKontak('jKontak','jNomor')"><option value="">— pilih kontak —</option></select><button class="sec" style="padding:6px 10px;font-size:13px" onclick="hapusKontakPilih('jKontak','jNomor')" title="Hapus kontak terpilih">🗑</button></div></div>
+<div><label>Kontak pelanggan <small>(kosong = isi manual)</small></label><div style="display:flex;gap:6px"><select id="jKontak" style="width:100%" onchange="pakaiKontak('jKontak','jNomor')"><option value="">- pilih kontak -</option></select><button class="sec" style="padding:6px 10px;font-size:13px" onclick="hapusKontakPilih('jKontak','jNomor')" title="Hapus kontak terpilih">🗑</button></div></div>
 <div><label>Nomor tujuan</label><input id="jNomor" style="width:100%" placeholder="08xxxxxxxxxx"></div>
 <div style="grid-column:1/-1"><details style="margin:2px 0"><summary style="cursor:pointer;font-size:13px;color:#667085">➕ Kontak baru (simpan biar next time tinggal pilih)</summary>
 <div class="grid2" style="margin-top:6px">
@@ -254,8 +229,9 @@ small{color:#667085}
 <div id="jIntWrap" style="display:none"><label>Interval hari</label><input id="jInt" type="number" value="7" min="1" style="width:100%"></div>
 </div>
 <div class="btnrow" style="margin-top:10px">
-<button onclick="jadwalAdd()">➕ Tambah Jadwal</button>
+<button id="jadwalAddButton" onclick="jadwalAdd()">➕ Tambah Jadwal</button>
 </div>
+<div id="jadwalAddStatus" class="action-status" role="status" aria-live="polite"></div>
 <p><small>Format jam: HH:MM 24 jam, WIB. Interval = beli tiap N hari pada jam yang ditentukan. Semua jadwal lewat guard yang sama (maintenance 23:40-00:35, harga naik, sesi login).</small></p>
 </div>
 <h2 style="font-size:14px">Daftar Jadwal</h2>
@@ -312,7 +288,7 @@ small{color:#667085}
 </div>
 <div class="card">
 <h2>Bot &amp; Notifikasi (Telegram)</h2>
-<p><small>Server kirim notif (reminder cookies, saldo menipis, hasil order) langsung ke kamu via Bot API. Token dari @BotFather. ID kamu dari @userinfobot. Setelah simpan, kirim /start ke bot sekali biar Telegram kenal, lalu klik Tes Notif.</small></p>
+<div class="btnrow" style="margin-top:0"><button class="sec" type="button" onclick="bukaDialog('telegramGuide')">Panduan Telegram</button></div>
 <div class="grid2">
 <div><label>Bot token (@BotFather)</label><input id="sBotToken" style="width:100%" placeholder="1234567890:AAxxxx..."></div>
 <div><label>ID Telegram admin (penerima notif)</label><input id="sBotAdmin" style="width:100%" placeholder="123456789"></div>
@@ -326,8 +302,8 @@ small{color:#667085}
 <div></div>
 </div>
 <div class="grid2">
-<div><label>Webhook URL agenpulsa — copy, lalu paste ke admin Paypan → Konfigurasi → Webhook → Tambah. Ganti URL server di atas (mis. CF tunnel) kalau mau ubah.</label>
-<div style="display:flex;gap:8px;align-items:center">
+<div><label>Webhook URL agenpulsa</label><button class="sec" type="button" onclick="bukaDialog('webhookGuide')">Panduan Webhook</button>
+<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
 <input id="sWebhook" style="width:100%;font-family:monospace;font-size:12px" disabled>
 <button class="sec" style="width:auto;white-space:nowrap" onclick="copyWebhook()">📋 Copy</button>
 <button class="sec" style="width:auto;white-space:nowrap" onclick="editWebhook()">✏️ Edit URL server</button>
@@ -357,16 +333,54 @@ small{color:#667085}
 <button onclick="tambahKey()">➕ Tambah Key</button>
 </div>
 </div>
-<button class="big" onclick="simpanSet()">💾 Simpan Pengaturan</button>
+<button class="big" id="settingsSaveButton" onclick="simpanSet()">💾 Simpan Pengaturan</button>
+<div id="settingsSaveStatus" class="save-status" role="status" aria-live="polite"></div>
 </div>
 
 </div>
 </div>
 </div>
+<dialog id="cookieGuide" aria-labelledby="cookieGuideTitle">
+<div class="dialog-head"><h2 id="cookieGuideTitle">Cara dapatkan cookies</h2><button class="dialog-close" type="button" onclick="tutupPanduanCookies()" aria-label="Tutup panduan">×</button></div>
+<div class="dialog-body">
+<ol>
+<li><strong>Login ke isipulsa</strong>Buka `isipulsa.web.id` di Chrome atau Edge pada HP/PC sendiri, lalu login seperti biasa.</li>
+<li><strong>Pasang Cookie-Editor</strong>Cari ekstensi Cookie-Editor di Chrome Web Store atau Edge Add-ons, lalu pasang.</li>
+<li><strong>Export cookies</strong>Kembali ke tab isipulsa. Buka Cookie-Editor, pilih Export, lalu salin JSON atau simpan file `.json`.</li>
+<li><strong>Masukkan di halaman ini</strong>Pilih Upload File untuk file JSON, atau paste JSON ke kolom bawah.</li>
+<li><strong>Inject Cookies</strong>Tekan tombol Inject Cookies. Setelah sukses, cek status akun di atas.</li>
+</ol>
+</div>
+</dialog>
+<dialog id="telegramGuide" aria-labelledby="telegramGuideTitle">
+<div class="dialog-head"><h2 id="telegramGuideTitle">Panduan Telegram</h2><button class="dialog-close" type="button" onclick="tutupDialog('telegramGuide')" aria-label="Tutup panduan">×</button></div>
+<div class="dialog-body"><ol>
+<li><strong>Buat bot</strong>Buka @BotFather di Telegram. Kirim `/newbot`, lalu ikuti langkah sampai menerima token bot.</li>
+<li><strong>Simpan token</strong>Paste token ke kolom Bot token pada halaman ini.</li>
+<li><strong>Ambil ID Telegram</strong>Buka @userinfobot, kirim pesan apa saja, lalu salin nilai ID yang ditampilkan.</li>
+<li><strong>Simpan pengaturan</strong>Paste ID ke kolom ID Telegram admin, lalu tekan Simpan Pengaturan.</li>
+<li><strong>Aktifkan dan tes</strong>Kirim `/start` ke bot yang dibuat, kemudian tekan Tes Notif.</li>
+</ol></div>
+</dialog>
+<dialog id="webhookGuide" aria-labelledby="webhookGuideTitle">
+<div class="dialog-head"><h2 id="webhookGuideTitle">Panduan Webhook</h2><button class="dialog-close" type="button" onclick="tutupDialog('webhookGuide')" aria-label="Tutup panduan">×</button></div>
+<div class="dialog-body"><ol>
+<li><strong>Pastikan URL server publik</strong>Isi URL server pada bagian Integrasi, lalu Simpan Pengaturan.</li>
+<li><strong>Salin URL webhook</strong>Tekan Copy di samping URL webhook.</li>
+<li><strong>Tambahkan di Paypan</strong>Buka admin Paypan, masuk ke Konfigurasi lalu Webhook, kemudian Tambah.</li>
+<li><strong>Paste dan simpan</strong>Paste URL tadi sebagai endpoint webhook, lalu simpan.</li>
+<li><strong>Pastikan secret sama</strong>Nilai Paypan secret pada AgenPulsa harus sama dengan webhook secret yang digunakan Paypan.</li>
+</ol></div>
+</dialog>
 <script>
 const rp=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
+function bukaPanduanCookies(){bukaDialog('cookieGuide')}
+function tutupPanduanCookies(){tutupDialog('cookieGuide')}
+function bukaDialog(id){$(id).showModal()}
+function tutupDialog(id){$(id).close()}
+document.querySelectorAll('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
 async function api(path,opt={}){
   const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json'}});
   if(r.status===401){location.href='/';throw new Error('redirect')}
@@ -374,13 +388,30 @@ async function api(path,opt={}){
   return r.json();
 }
 function flash(msg,err){const f=$('flash');f.textContent=msg;f.className='flash'+(err?' err':'');f.style.display='block';setTimeout(()=>f.style.display='none',4000)}
+function actionStatus(id,msg,err){const el=$(id);if(!el)return;el.textContent=msg;el.className='action-status '+(err?'err':'ok')}
+async function runAction(button,statusId,working,action){
+  const old=button.textContent;button.disabled=true;button.textContent=working;actionStatus(statusId,working);
+  try{const result=await action();actionStatus(statusId,result||'Selesai.');return result}
+  catch(e){actionStatus(statusId,'Gagal: '+e.message,1);throw e}
+  finally{button.disabled=false;button.textContent=old}
+}
 
 const judul={dash:'Dashboard',akun:'Akun Login',katalog:'Katalog',beli:'Pembelian',laporan:'Laporan',set:'Pengaturan'};
+const sidebar=$('sidebar'),navScrim=$('navScrim'),menuToggle=$('menuToggle');
+function setMenu(open){
+  sidebar.classList.toggle('open',open);
+  navScrim.classList.toggle('open',open);
+  menuToggle.setAttribute('aria-expanded',String(open));
+}
+menuToggle.onclick=()=>setMenu(!sidebar.classList.contains('open'));
+navScrim.onclick=()=>setMenu(false);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setMenu(false)});
 function show(t){
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   $('tab-'+t).classList.add('on');
   document.querySelectorAll('.menu a').forEach(a=>a.classList.toggle('on',a.dataset.tab===t));
   $('judul').textContent=judul[t];
+  setMenu(false);
   if(t==='akun')cekAkun();
   if(t==='katalog')loadCatalog();
   if(t==='beli')loadBeli();
@@ -404,7 +435,7 @@ async function loadKontak(){
     for(const [sel,inpt] of [['mKontak','mNomor'],['jKontak','jNomor']]){
       const s=$(sel);if(!s)continue;
       const cur=s.value;
-      s.innerHTML='<option value="">— pilih kontak —</option>';
+      s.innerHTML='<option value="">- pilih kontak -</option>';
       kontakCache.forEach(k=>{
         s.insertAdjacentHTML('beforeend',`<option value="${esc(k.nama)}">${esc(k.nama)} (${esc(k.nomor)})</option>`);
       });
@@ -443,7 +474,7 @@ async function hapusKontakPilih(selId,inptId){
 function isiKatalogSelect(sel){
   sel.innerHTML='';
   (katalogCache||[]).filter(k=>k.aktif).forEach(k=>{
-    sel.insertAdjacentHTML('beforeend',`<option value="${k.id}">${esc(k.label)} — ${rp(k.harga_jual)}</option>`);
+    sel.insertAdjacentHTML('beforeend',`<option value="${k.id}">${esc(k.label)} - ${rp(k.harga_jual)}</option>`);
   });
 }
 async function loadBeli(){
@@ -456,14 +487,15 @@ async function loadBeli(){
 }
 async function beliManual(){
   const cid=+$('mCatalog').value, nomor=$('mNomor').value.trim();
-  if(!cid){flash('Pilih katalog dulu (tambah di tab Katalog)',1);return}
-  if(!nomor){flash('Isi nomor tujuan',1);return}
+  if(!cid){actionStatus('mBuyStatus','Pilih katalog dulu.',1);return}
+  if(!nomor){actionStatus('mBuyStatus','Isi nomor tujuan.',1);return}
   try{
-    const o=await api('/api/v1/beli',{method:'POST',body:JSON.stringify({catalog_id:cid,nomor:nomor})});
-    flash('Order #'+(o.id||'?')+' masuk queue — ref '+(o.ref||''));
-    $('mNomor').value='';
-    loadOrders();
-  }catch(e){flash(e.message,1)}
+    await runAction($('mBuyButton'),'mBuyStatus','Memasukkan order...',async()=>{
+      const o=await api('/api/v1/beli',{method:'POST',body:JSON.stringify({catalog_id:cid,nomor:nomor})});
+      $('mNomor').value='';loadOrders();
+      return 'Order masuk queue. Ref: '+(o.ref||'-');
+    });
+  }catch(e){}
 }
 function jTipeChange(){
   const t=$('jTipe').value;
@@ -488,11 +520,12 @@ async function jadwalAdd(){
   const body={tipe:tipe,label:$('jLabel').value.trim(),catalog_id:+$('jCatalog').value,
     nomor:$('jNomor').value.trim(),jam:jam,interval_hari:+$('jInt').value||1};
   try{
-    await api('/api/v1/jadwal',{method:'POST',body:JSON.stringify(body)});
-    flash('Jadwal ditambah');
-    $('jLabel').value='';$('jNomor').value='';
-    loadJadwal();
-  }catch(e){flash(e.message,1)}
+    await runAction($('jadwalAddButton'),'jadwalAddStatus','Menyimpan jadwal...',async()=>{
+      await api('/api/v1/jadwal',{method:'POST',body:JSON.stringify(body)});
+      $('jLabel').value='';$('jNomor').value='';loadJadwal();
+      return 'Jadwal ditambahkan.';
+    });
+  }catch(e){}
 }
 async function jadwalToggle(id){
   try{await api('/api/v1/jadwal/'+id+'/toggle',{method:'POST'});loadJadwal()}catch(e){flash(e.message,1)}
@@ -541,20 +574,22 @@ async function loadOrders(){
                  .replace(/".*?"\s*\]/,'')                     // sisa bracket args
                  .trim();
       if(pesan.length>160)pesan=pesan.slice(0,160)+'…';
-      return `<tr><td><small>${esc((o.created_at||'').slice(5,16))}</small></td><td>${esc(o.label)}</td><td>${esc(o.nomor)}</td><td class="money">${rp(o.modal)}</td><td class="money"><b>${rp(o.harga_jual)}</b></td><td><span class="badge ${o.status}">${o.status}</span></td><td><small title="${esc(o.pesan||'')}">${pesan}</small></td></tr>`;
+      return `<tr><td data-label="Waktu"><small>${esc((o.created_at||'').slice(5,16))}</small></td><td data-label="Paket">${esc(o.label)}</td><td data-label="Nomor">${esc(o.nomor)}</td><td data-label="Modal" class="money">${rp(o.modal)}</td><td data-label="Jual" class="money"><b>${rp(o.harga_jual)}</b></td><td data-label="Status"><span class="badge ${o.status}">${o.status}</span></td><td data-label="Pesan"><small title="${esc(o.pesan||'')}">${pesan}</small></td></tr>`;
     }).join('');
     const empty='<tr><td colspan="7" class="empty">Belum ada order</td></tr>';
     document.querySelector('#orders tbody').innerHTML=rows||empty;
     document.querySelector('#lOrders tbody').innerHTML=rows||empty;
+    const attention=(os||[]).filter(o=>['failed','pending_payment','queued','running'].includes(o.status)).slice(0,5);
+    $('attentionList').innerHTML=attention.length?attention.map(o=>`<div class="attention-item"><span><b>${esc(o.label)}</b><br><small>${esc(o.nomor)} · <span class="badge ${o.status}">${o.status}</span></small></span><small>${esc((o.pesan||'Perlu dicek').slice(0,90))}</small></div>`).join(''):'<span class="empty">Tidak ada order perlu perhatian.</span>';
   }catch(e){}
 }
 async function hapusHistory(mode){
   let url='/api/v1/orders';
   if(mode==='failed'){
-    if(!confirm('Hapus semua order FAILED?'))return;
+    if(!confirm('Hapus semua order FAILED? Order gagal hilang permanen dari riwayat.'))return;
     url+='?status=failed';
   }else{
-    if(!confirm('Hapus SEMUA history order? (catalog & settings aman)'))return;
+    if(!confirm('Hapus SEMUA history order? Ini permanen. Katalog dan pengaturan tetap aman.'))return;
     url+='?konfirmasi=ya';
   }
   try{
@@ -605,7 +640,7 @@ async function cariPaket(){
 }
 function pilihPaket(it){
   $('kID').value='';
-  $('kLabel').value=it.nama;          // judul marketing — bebas diedit
+  $('kLabel').value=it.nama;          // judul marketing - bebas diedit
   $('kTab').value=it.produk==='paket_kuota'?'Paket Kuota':(it.produk==='pulsa'?'Pulsa':it.produk);
   $('kVoucher').value=it.voucher;
   $('kCari').value=it.nama;           // nama asli isipulsa (anti-drift + fallback)
@@ -615,18 +650,20 @@ function pilihPaket(it){
   $('kAktif').checked=true;
   $('kFormJudul').textContent='Tambah Katalog: '+it.nama;
   $('kFormJudul').scrollIntoView({behavior:'smooth'});
-  flash('Paket dipilih ('+(it.operator||'provider?')+') — Label boleh diubah, jangan ubah Voucher/Nama asli/Provider.');
+  flash('Paket dipilih ('+(it.operator||'provider?')+') - Label boleh diubah, jangan ubah Voucher/Nama asli/Provider.');
 }
 async function simpanKatalog(){
+  const body={label:$('kLabel').value.trim(),tab:$('kTab').value.trim()||'Paket Kuota',voucher:$('kVoucher').value.trim(),cari:$('kCari').value.trim(),operator:$('kOperator').value.trim(),harga_max:+$('kMax').value||0,harga_jual:+$('kJual').value||0,aktif:$('kAktif').checked};
+  if(!body.label){actionStatus('catalogSaveStatus','Label wajib diisi.',1);return}
+  const id=+$('kID').value;
+  if(id)body.id=id;
   try{
-    const body={label:$('kLabel').value.trim(),tab:$('kTab').value.trim()||'Paket Kuota',voucher:$('kVoucher').value.trim(),cari:$('kCari').value.trim(),operator:$('kOperator').value.trim(),harga_max:+$('kMax').value||0,harga_jual:+$('kJual').value||0,aktif:$('kAktif').checked};
-    if(!body.label){flash('Label wajib diisi',1);return}
-    const id=+$('kID').value;
-    if(id)body.id=id;
-    await api('/api/v1/catalog',{method:'POST',body:JSON.stringify(body)});
-    flash(id?'Katalog #'+id+' diupdate':'Katalog ditambah');
-    resetForm();loadCatalog();
-  }catch(e){flash(e.message,1)}
+    await runAction($('catalogSaveButton'),'catalogSaveStatus','Menyimpan katalog...',async()=>{
+      await api('/api/v1/catalog',{method:'POST',body:JSON.stringify(body)});
+      resetForm();loadCatalog();
+      return id?'Katalog diperbarui.':'Katalog ditambahkan.';
+    });
+  }catch(e){}
 }
 async function hapusKatalog(id){
   if(!confirm('Hapus katalog #'+id+'?'))return;
@@ -646,26 +683,25 @@ async function cekAkun(){
     if(a.cookie_umur_jam<0){ck.textContent='belum inject / reset'}
     else{ck.textContent=(a.cookie_umur_jam/24).toFixed(1)+' hari'}
     if(a.cookie_reminder){
-      warn.textContent='⚠️ Cookies sudah '+Math.floor(a.cookie_umur_jam/24)+' hari. Sesi isipulsa bisa mati mendadak — inject cookies baru (export Cookie-Editor → kolom di bawah).';
+      warn.textContent='⚠️ Cookies sudah '+Math.floor(a.cookie_umur_jam/24)+' hari. Sesi isipulsa bisa mati mendadak - inject cookies baru (export Cookie-Editor → kolom di bawah).';
       warn.style.display='block';
     } else warn.style.display='none';
     const m=$('akMasalah');
-    if(a.login){flash('Login isipulsa AKTIF — saldo '+a.saldo)}
+    if(a.login){flash('Login isipulsa AKTIF - saldo '+a.saldo)}
     if(a.masalah){m.textContent=a.masalah;m.style.display='block'}else m.style.display='none';
   }catch(e){flash(e.message,1)}
 }
 async function importCookies(){
   const raw=$('cCookies').value.trim();
-  if(!raw){flash('Paste cookie JSON dulu',1);return}
+  if(!raw){actionStatus('cookieInjectStatus','Paste cookie JSON dulu.',1);return}
+  try{JSON.parse(raw)}catch(e){actionStatus('cookieInjectStatus','JSON tidak valid: '+e.message,1);return}
   try{
-    JSON.parse(raw); // validasi lokal dulu
-  }catch(e){flash('JSON tidak valid: '+e.message,1);return}
-  try{
-    const r=await api('/api/v1/account/cookies',{method:'POST',body:JSON.stringify({cookies:raw})});
-    flash(r.pesan||r.jumlah+' cookie diinject');
-    $('cCookies').value='';
-    cekAkun();
-  }catch(e){flash(e.message,1)}
+    await runAction($('cookieInjectButton'),'cookieInjectStatus','Menyimpan cookies...',async()=>{
+      const r=await api('/api/v1/account/cookies',{method:'POST',body:JSON.stringify({cookies:raw})});
+      $('cCookies').value='';cekAkun();
+      return r.pesan||r.jumlah+' cookie diinject.';
+    });
+  }catch(e){}
 }
 function uploadCookieFile(){
   const f=$('cFile').files[0];
@@ -684,7 +720,7 @@ function uploadCookieFile(){
 }
 async function hapusAkun(){
   if(!confirm('Hapus semua cookies/sesi isipulsa dari server? Setelah ini tinggal inject cookies akun baru.'))return;
-  try{await api('/api/v1/account/relogin',{method:'POST'});flash('Akun dihapus — profile bersih. Inject cookies akun baru.');cekAkun()}
+  try{await api('/api/v1/account/relogin',{method:'POST'});flash('Akun dihapus - profile bersih. Inject cookies akun baru.');cekAkun()}
   catch(e){flash(e.message,1)}
 }
 async function simpanNama(){
@@ -708,7 +744,7 @@ async function loadSet(){
     $('sSaldoNotifJam').value=s.saldo_notif_jam||'1';
     // webhook URL = server_url + /webhook (dipakai paypan)
     $('sWebhook').value=(s.server_url||window.location.origin).replace(/\/+$/,'')+'/webhook';
-    // token gak dibalikin (sensitif) — placeholder saja kalau sudah diset
+    // token gak dibalikin (sensitif) - placeholder saja kalau sudah diset
     $('sBotToken').value=s.bot_tg_token||'';
     $('sBotToken').placeholder='1234567890:AAxxxx...';
     const ks=await api('/api/v1/keys').catch(()=>[]);
@@ -723,7 +759,7 @@ async function tambahKey(){
   try{
     const r=await api('/api/v1/keys',{method:'POST',body:JSON.stringify({
       nama:nama,key:$('keyVal').value.trim(),boleh_order:$('akOrder').checked,boleh_admin:$('akAdmin').checked})});
-    flash('Key dibuat: '+r.key+' — salin sekarang, gak ditampilkan lagi lengkap dengan izinnya.');
+    flash('Key dibuat: '+r.key+' - salin sekarang, gak ditampilkan lagi lengkap dengan izinnya.');
     $('keyNama').value='';$('keyVal').value='';$('akOrder').checked=true;$('akAdmin').checked=false;
     loadSet();
   }catch(e){flash(e.message,1)}
@@ -734,6 +770,8 @@ async function hapusKey(key){
   catch(e){flash(e.message,1)}
 }
 async function simpanSet(){
+  const btn=$('settingsSaveButton'),status=$('settingsSaveStatus');
+  const setStatus=(msg,kind)=>{status.textContent=msg;status.className='save-status '+kind};
   try{
     const body={};
     if($('sUser').value.trim())body.admin_user=$('sUser').value.trim();
@@ -747,16 +785,19 @@ async function simpanSet(){
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     if($('sSaldoInt').value)body.saldo_interval_menit=$('sSaldoInt').value.trim();
     if($('sSaldoNotifJam').value)body.saldo_notif_jam=$('sSaldoNotifJam').value.trim();
+    btn.disabled=true;btn.textContent='Menyimpan...';setStatus('Menyimpan pengaturan...','');
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
-    flash('Disimpan: '+(r.changed||[]).join(', '));
+    const changed=r.changed||[];
+    setStatus(changed.length?'Pengaturan tersimpan.':'Tidak ada perubahan untuk disimpan.',changed.length?'ok':'');
     $('sPass').value='';
     loadSet();
-  }catch(e){flash(e.message,1)}
+  }catch(e){setStatus('Gagal menyimpan: '+e.message,'err')}
+  finally{btn.disabled=false;btn.textContent='💾 Simpan Pengaturan'}
 }
 async function tesBot(){
   try{
     await api('/api/v1/tes-bot',{method:'POST'});
-    flash('✅ Pesan tes terkirim — cek Telegram kamu');
+    flash('✅ Pesan tes terkirim - cek Telegram kamu');
   }catch(e){flash(e.message,1)}
 }
 function copyWebhook(){

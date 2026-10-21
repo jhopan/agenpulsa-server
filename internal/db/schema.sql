@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS orders (
     order_id_isipulsa TEXT,
     pesan TEXT,
     invoice_id TEXT,                        -- id invoice paypan (pending_payment)
+    expires_at INTEGER NOT NULL DEFAULT 0, -- unix deadline bayar invoice (0 = tak terbatas)
     sumber TEXT NOT NULL DEFAULT 'api',     -- api|telegram|wa|paypan|admin|scheduler
     chat_id TEXT,                           -- untuk callback ke client
     callback_url TEXT,

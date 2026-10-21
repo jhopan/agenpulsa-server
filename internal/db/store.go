@@ -132,6 +132,7 @@ type Order struct {
 	OrderIDIsip string `json:"order_id_isipulsa"`
 	Pesan       string `json:"pesan"`
 	InvoiceID   string `json:"invoice_id"`
+	ExpiresAt   int64  `json:"expires_at"` // unix deadline bayar invoice
 	Sumber      string `json:"sumber"`
 	ChatID      string `json:"chat_id"`
 	CallbackURL string `json:"callback_url"`
@@ -139,12 +140,12 @@ type Order struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
-const orderCols = "id,COALESCE(ref,''),COALESCE(nomor,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
+const orderCols = "id,COALESCE(ref,''),COALESCE(nomor,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),COALESCE(expires_at,0),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
 
 func scanOrder(sc interface{ Scan(...any) error }) (*Order, error) {
 	var o Order
 	err := sc.Scan(&o.ID, &o.Ref, &o.Nomor, &o.CatalogID, &o.Label, &o.Modal, &o.HargaJual, &o.Status,
-		&o.OrderIDIsip, &o.Pesan, &o.InvoiceID, &o.Sumber, &o.ChatID, &o.CallbackURL, &o.CreatedAt, &o.UpdatedAt)
+		&o.OrderIDIsip, &o.Pesan, &o.InvoiceID, &o.ExpiresAt, &o.Sumber, &o.ChatID, &o.CallbackURL, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -160,9 +161,9 @@ func (s *Store) CreateOrder(o *Order) (int64, error) {
 	if o.CatalogID > 0 {
 		catalogID = o.CatalogID
 	}
-	r, err := s.DB.Exec(`INSERT INTO orders(ref,nomor,catalog_id,label,modal,harga_jual,status,order_id_isipulsa,pesan,invoice_id,sumber,chat_id,callback_url,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		o.Ref, o.Nomor, catalogID, o.Label, o.Modal, o.HargaJual, o.Status, o.OrderIDIsip, o.Pesan, o.InvoiceID, o.Sumber, o.ChatID, o.CallbackURL, o.CreatedAt, o.UpdatedAt)
+	r, err := s.DB.Exec(`INSERT INTO orders(ref,nomor,catalog_id,label,modal,harga_jual,status,order_id_isipulsa,pesan,invoice_id,expires_at,sumber,chat_id,callback_url,created_at,updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		o.Ref, o.Nomor, catalogID, o.Label, o.Modal, o.HargaJual, o.Status, o.OrderIDIsip, o.Pesan, o.InvoiceID, o.ExpiresAt, o.Sumber, o.ChatID, o.CallbackURL, o.CreatedAt, o.UpdatedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -212,9 +213,9 @@ func (s *Store) UpdateOrderStatus(id int64, status, pesan, orderIDIsip string) e
 }
 
 // SetOrderInvoice simpan id invoice paypan ke order.
-func (s *Store) SetOrderInvoice(id int64, invoiceID string) error {
-	_, err := s.DB.Exec("UPDATE orders SET invoice_id=?,updated_at=? WHERE id=?",
-		invoiceID, NowWIB().Format("2006-01-02 15:04:05"), id)
+func (s *Store) SetOrderInvoice(id int64, invoiceID string, expiresAt int64) error {
+	_, err := s.DB.Exec("UPDATE orders SET invoice_id=?,expires_at=?,updated_at=? WHERE id=?",
+		invoiceID, expiresAt, NowWIB().Format("2006-01-02 15:04:05"), id)
 	return err
 }
 

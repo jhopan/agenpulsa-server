@@ -2,17 +2,18 @@ package main
 
 import (
 	"encoding/json"
-	"net/http"
 	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jhopan/agenpulsa-server/internal/api"
 	"github.com/jhopan/agenpulsa-server/internal/db"
 	"github.com/jhopan/agenpulsa-server/internal/engine"
-	"github.com/jhopan/agenpulsa-server/internal/api"
 )
 
 func TestNormalizeNomor(t *testing.T) {
@@ -133,6 +134,34 @@ func TestAPISmoke(t *testing.T) {
 	}
 }
 
+func TestAdminPageHasResponsiveNavigation(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	cookie := loginAdmin(t, srv)
+
+	req, err := http.NewRequest("GET", srv.URL+"/admin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(cookie)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("admin page harus 200, got %d", res.StatusCode)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"id=\"menuToggle\"", "class=\"nav-scrim\"", "AgenPulsa Admin", "id=\"cookieGuide\"", "Cara dapatkan cookies", "id=\"telegramGuide\"", "Panduan Telegram", "id=\"webhookGuide\"", "Panduan Webhook", "id=\"settingsSaveStatus\""} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("admin page harus memuat %q", want)
+		}
+	}
+}
+
 func TestLoginSmoke(t *testing.T) {
 	dir := t.TempDir()
 	store, err := db.Open(filepath.Join(dir, "t.db"))
@@ -207,6 +236,16 @@ func TestLoginSmoke(t *testing.T) {
 	}
 }
 
+
+func mustEngine(t *testing.T, store *db.Store) *engine.Engine {
+	t.Helper()
+	e, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { e.Close() })
+	return e
+}
 
 // newTestServer: server API + DB sementara untuk test (dipakai beberapa test).
 func newTestServer(t *testing.T) (*httptest.Server, *db.Store, *engine.Engine) {
@@ -288,4 +327,48 @@ func TestGuardJadwalMasaLalu(t *testing.T) {
 	if res.StatusCode != 400 {
 		t.Errorf("langganan kemarin harus 400, got %d", res.StatusCode)
 	}
+}
+
+// TestExpirePendingLokal: order pending_payment yang lewat deadline bayar
+// (5 menit) harus jadi failed — tidak nyangkut, tidak dieksekusi.
+func TestExpirePendingLokal(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	// order pending tanpa invoice_id (paypan gak bisa dicek -> expire lokal)
+	lampau := db.NowWIB().Add(-10 * time.Minute).Format("2006-01-02 15:04:05")
+	o := &db.Order{
+		Ref: "exp-test-1", Nomor: "081234567890", Label: "T",
+		Status: "pending_payment", Sumber: "api", CreatedAt: lampau, UpdatedAt: lampau,
+	}
+	id, err := store.CreateOrder(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// order pending yang MASIH di dalam window bayar
+	baru := db.NowWIB().Format("2006-01-02 15:04:05")
+	o2 := &db.Order{
+		Ref: "exp-test-2", Nomor: "081234567891", Label: "T",
+		Status: "pending_payment", Sumber: "api", CreatedAt: baru, UpdatedAt: baru,
+	}
+	id2, err := store.CreateOrder(o2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := api.New(store, mustEngine(t, store), testWebFS())
+	a.ExpirePendingForTest()
+
+	g1, _ := store.GetOrder(id)
+	if g1.Status != "failed" {
+		t.Errorf("order lewat 5 menit harus failed, dapat %q", g1.Status)
+	}
+	if g1.Pesan == "" {
+		t.Error("order failed harus ada pesan")
+	}
+	g2, _ := store.GetOrder(id2)
+	if g2.Status != "pending_payment" {
+		t.Errorf("order baru harus tetap pending_payment, dapat %q", g2.Status)
+	}
+	_ = srv
 }

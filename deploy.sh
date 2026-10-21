@@ -5,7 +5,7 @@
 set -euo pipefail
 
 case "${1:-}" in
-  staging) HOST=armbian-jhosua1; GOARCH=arm64; PORT=8081; IP=192.168.11.23 ;;
+  staging) HOST=root@192.168.10.22; GOARCH=arm64; PORT=8081; IP=192.168.10.22 ;;
   prod)    HOST=laptop-debian;   GOARCH=amd64; PORT=8082; IP=127.0.0.1 ;;
   *) echo "usage: $0 {staging|prod}"; exit 1 ;;
 esac
@@ -22,6 +22,10 @@ scp -q "$BIN"        "$HOST:$DIR/agenpulsa-server"
 scp -q web/index.html web/login.html web/logo_agenpulsa_server.png \
        web/favicon-32.png web/favicon-48.png web/apple-touch-icon.png "$HOST:$DIR/web/"
 scp -q helper/isip_api.py "$HOST:$DIR/helper/isip_api.py"
+scp -q requirements.txt "$HOST:$DIR/requirements.txt"
+
+echo "== dependency Python"
+ssh "$HOST" "python3 -m pip install --user -r $DIR/requirements.txt"
 
 echo "== restart service"
 ssh "$HOST" "chmod +x $DIR/agenpulsa-server && systemctl start agenpulsa-server && sleep 2 && systemctl is-active agenpulsa-server"
