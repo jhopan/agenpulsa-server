@@ -85,23 +85,104 @@ func (a *API) StartReconcile() {
 // Setelah itu order dianggap EXPIRED (gagal) — tidak dieksekusi, tidak nyangkut.
 const orderPayWindow = 5 * time.Minute
 
-// expirePending: order yang sudah lewat 5 menit sejak dibuat -> failed (expired).
-// TIDAK bergantung Paypan: keputusan expire murni server (created_at + 5 menit).
-// Cek Paypan cuma untuk order yang MASIH dalam window bayar (untuk menangkap
-// pembayaran yang webhook-nya hilang) — setelah 5 menit, tak ada request lagi.
+// Toleransi expire: antara batas 5 menit dan batas toleransi, order yang
+// paypan masih anggap "pending" ditunggu 2 menit lagi ( surrendered —
+// notif bayar bisa telat sampai 10 detik). Setelah itu expire paksa.
+const expireTolerance = 2 * time.Minute
+
+// paypanInv: invoice dari Paypan. nil = gak ada invoice_id / Paypan gak
+// bisa dihubungi (unknown).
+func (a *API) paypanInv(o *db.Order) *PaypanInvoice {
+	if o.InvoiceID == "" {
+		return nil
+	}
+	inv, err := a.ppClient.GetInvoice(a.store, o.InvoiceID)
+	if err != nil {
+		return nil
+	}
+	return inv
+}
+
+// expirePending: order yang lewat 5 menit sejak dibuat -> failed (expired).
+// Murni server (created_at + 5 menit), TIDAK bergantung Paypan untuk
+// keputusannya. Paypan dicek cuma untuk safety:
+//   - status "paid"         -> order diproses (bayar nyampe, webhook telat)
+//   - status "pending"      -> tungguin sebentar (bentrok notif 10 detik)
+//   - "unknown"/"expired"   -> expire; kalau "unknown" notif admin
+//                              (mungkin sudah dibayar -> perlu refund/buy manual)
 func (a *API) expirePending(now time.Time) {
 	pending, err := a.store.ListOrders("pending_payment", 200)
 	if err != nil {
 		return
 	}
 	for _, o := range pending {
-		if now.Unix() < o.DeadlineUnix() {
-			continue // masih dalam masa bayar
+		deadline := o.DeadlineUnix()
+		if deadline == 0 || now.Unix() < deadline {
+			continue // belum lewat 5 menit
 		}
+		// cek paypan: jangan buang order yang ternyata sudah dibayar
+		inv := a.paypanInv(o)
+		status := "unknown"
+		if inv != nil {
+			status = inv.Status
+		}
+		switch status {
+		case "paid":
+			log.Printf("[EXPIRE] order #%d ternyata SUDAH dibayar (webhook telat) -> diproses", o.ID)
+			a.terimaPembayaranLate(o, inv.Total)
+			continue
+		case "pending":
+			if now.Unix() < deadline+int64(expireTolerance.Seconds()) {
+				continue // masih dalam toleransi — tunggu notif bayar
+			}
+		}
+		// Paypan gak bisa dihubungi (atau order tanpa invoice) -> mungkin user
+		// sudah bayar tapi notif belum masuk. Perlu dicek manual.
+		perluCek := status == "unknown" && o.InvoiceID != ""
 		_ = a.store.UpdateOrderStatus(o.ID, "failed",
 			"expired — tidak dibayar dalam 5 menit", "")
 		log.Printf("[EXPIRE] order #%d (ref %s) lewat 5 menit -> failed", o.ID, o.Ref)
+		a.notifExpired(o, perluCek)
 	}
+}
+
+// notifExpired: kabari admin order expired. perluCek=true kalau Paypan
+// gak bisa dihubungi -> mungkin user SUDAH bayar, perlu refund / beli manual.
+func (a *API) notifExpired(o *db.Order, perluCek bool) {
+	judul := "⏰ *Order Expired* — tidak dibayar dalam 5 menit"
+	if perluCek {
+		judul = "⚠️ *Order Expired — PERLU CEK MANUAL*"
+	}
+	msg := judul + "\n\n" +
+		"🔖 Ref: `" + o.Ref + "`\n" +
+		"📱 Nomor: " + o.Nomor + "\n" +
+		"📦 " + o.Label + "\n" +
+		"💵 Harga: Rp " + strconv.FormatInt(o.HargaJual, 10) + "\n" +
+		"🧾 Invoice: " + o.InvoiceID + "\n" +
+		"🕐 Dibuat: " + o.CreatedAt + " WIB"
+	if perluCek {
+		msg += "\n\n" +
+			"Paypan tidak bisa dihubungi saat order expire — *mungkin user sudah bayar*.\n" +
+			"Cek invoice di admin Paypan. Kalau memang sudah paid → refund manual atau beli paket manual ke nomor tsb."
+	} else {
+		msg += "\n\n" +
+			"Pelanggan belum bayar — tidak ada dana masuk, tidak perlu refund.\n" +
+			"Kalau mau, suruh order ulang."
+	}
+	a.TgNotify(msg)
+}
+
+// terimaPembayaranLate: order yang dibayar setelah expire -> diproses ulang
+// (customer udah bayar, gak boleh diamkan).
+func (a *API) terimaPembayaranLate(o *db.Order, total int64) {
+	_ = a.store.UpdateOrderStatus(o.ID, "pending_payment", "", "")
+	o.Status = "pending_payment"
+	a.terimaPembayaran(o, total)
+	a.TgNotify("✅ *Order dibayar terlambat* (setelah expired)\n\n" +
+		"🔖 Ref: `" + o.Ref + "`\n" +
+		"📱 Nomor: " + o.Nomor + "\n" +
+		"📦 " + o.Label + "\n" +
+		"Order diproses ulang — tidak perlu refund.")
 }
 
 // ExpirePendingForTest: ekspos expirePending buat test (tanpa start loop).
