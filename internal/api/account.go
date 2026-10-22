@@ -163,6 +163,8 @@ var settingKeys = map[string]bool{
 	"saldo_min":            true, // ambang alert saldo isipulsa (default 20000)
 	"saldo_interval_menit": true, // jeda cek saldo (menit, default 30, 5-1440)
 	"saldo_notif_jam":      true, // ulang notif saldo tiap N jam (default 1)
+	"sheet_backup_url":     true, // URL Apps Script untuk backup order ke Google Sheet
+	"sheet_backup_token":   true, // token rahasia biar sheet cuma bisa diisi server ini
 }
 
 // tambahKey: buat/upsert API key client (admin only).

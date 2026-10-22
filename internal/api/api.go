@@ -25,6 +25,10 @@ type API struct {
 	web      fs.FS
 	ppCfg    PaypanConfig
 	ppClient *PaypanClient
+	// rate limit order (P6) + health (P7)
+	orderLimiter *rateLimiter
+	startedAt    time.Time
+	version      string
 }
 
 func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
@@ -32,7 +36,12 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 	// ENV = level infrastruktur saja (port, path). Config runtime (paypan dll)
 	// murni dari settings DB via web admin — live, tanpa rebuild/restart.
 	cfg := PaypanConfig{Timeout: 30 * time.Second}
-	a := &API{store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg)}
+	a := &API{
+		store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg),
+		orderLimiter: newRateLimiter(10, 5*time.Minute), // 10 order / 5 menit / kunci
+		startedAt:    time.Now(),
+		version:      "1.2.0",
+	}
 	// notif hasil order berbayar -> Telegram admin (kalau bot dikonfigurasi).
 	eng.Notifier = func(o db.Order, status, pesan string) {
 		a.TgNotify(formatOrderNotif(&o, status, pesan))
@@ -308,11 +317,13 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/catalog", a.auth(true, a.upsertCatalog))
 	mux.HandleFunc("DELETE /api/v1/catalog/{id}", a.auth(true, a.deleteCatalog))
 
-	mux.HandleFunc("POST /api/v1/orders", a.auth(false, a.createOrder))
+	mux.HandleFunc("POST /api/v1/orders", a.auth(false, a.rateLimitOrder(a.createOrder)))
 	mux.HandleFunc("GET /api/v1/orders/{id}", a.auth(false, a.getOrder))
 	mux.HandleFunc("GET /api/v1/orders", a.auth(false, a.listOrders))
 	mux.HandleFunc("DELETE /api/v1/orders", a.auth(true, a.hapusHistory))
-	mux.HandleFunc("POST /api/v1/orders/pending", a.auth(false, a.createPending)) // flow paypan
+	mux.HandleFunc("POST /api/v1/orders/pending", a.auth(false, a.rateLimitOrder(a.createPending))) // flow paypan
+	// Langganan (jadwal sekali) juga dibatasi.
+	mux.HandleFunc("POST /api/v1/langganan", a.rateLimitOrder(a.langgananBaru))
 
 	mux.HandleFunc("GET /api/v1/status", a.auth(false, a.status))
 	mux.HandleFunc("GET /api/v1/report", a.auth(false, a.report))
@@ -346,8 +357,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/contacts", a.auth(true, a.simpanContact))
 	mux.HandleFunc("DELETE /api/v1/contacts/{nama}", a.auth(true, a.hapusContact))
 
-	// Langganan customer: set jadwal sendiri -> bayar -> jadwal aktif (publik).
-	mux.HandleFunc("POST /api/v1/langganan", a.langgananBaru)
+	// Health check publik (auto-ping / monitoring) — tanpa API key.
+	mux.HandleFunc("GET /health", a.health)
 
 	// Paypan webhook (HMAC, tanpa API key).
 	mux.HandleFunc("POST /webhook", a.paypanWebhook)
@@ -731,3 +742,43 @@ func randomHex(n int) string {
 }
 
 var _ = time.Now
+
+// ---------- Watchdog order nyangkut (P1) ----------
+
+// runningMaxUmur: order 'running' lebih lama dari ini dianggap nyangkut
+// (server crash / restart di tengah jalan). Umur normal order < 2 menit.
+const runningMaxUmur = 10 * time.Minute
+
+// StartWatchdog: cek tiap menit order yang nyangkut di status 'running'.
+// TIDAK di-retry (user: expire/nyangkut cukup notifikasi, bukan retry) —
+// order di-fail + notifikasi admin biar tau dan bisa beli manual.
+func (a *API) StartWatchdog() {
+	go func() {
+		for {
+			time.Sleep(60 * time.Second)
+			a.watchdogTick()
+		}
+	}()
+}
+
+func (a *API) watchdogTick() {
+	stuck, err := a.store.StuckRunning(runningMaxUmur)
+	if err != nil || len(stuck) == 0 {
+		return
+	}
+	for _, o := range stuck {
+		_ = a.store.UpdateOrderStatus(o.ID, "failed",
+			"order nyangkut (server restart saat proses) — tidak diproses otomatis, cek manual", "")
+		log.Printf("[WATCHDOG] order #%d (ref %s) nyangkut > %s -> failed + notif", o.ID, o.Ref, runningMaxUmur)
+		a.TgNotify("🚨 *Order Nyangkut* (server restart saat proses)\n\n" +
+			"🔖 Ref: `" + o.Ref + "`\n" +
+			"📱 Nomor: " + o.Nomor + "\n" +
+			"📦 " + o.Label + "\n" +
+			"💵 Harga: Rp " + strconv.FormatInt(o.HargaJual, 10) + "\n" +
+			"\nOrder TIDAK diproses ulang otomatis (biar aman).\n" +
+			"Cek: kalau user sudah bayar → beli manual ke nomor tsb, atau refund.")
+	}
+}
+
+// WatchdogTickForTest: paksa 1x tick watchdog (buat test).
+func (a *API) WatchdogTickForTest() { a.watchdogTick() }

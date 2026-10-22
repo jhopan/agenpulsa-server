@@ -235,12 +235,82 @@ func (s *Store) GetOrderByInvoice(invoiceID string) (*Order, error) {
 }
 
 // PopNextQueued ambil satu order terlama berstatus queued (FIFO).
+// PopNextQueued ambil satu order queued dan LANGSUNG claim (status=running)
+// dalam satu transaksi. Tanpa claim atomik, 2 worker bisa ambil order yang
+// sama -> order dieksekusi 2x -> pulsa dobel untuk satu pembayaran.
+//
+// Return nil,nil = tidak ada antrian.
 func (s *Store) PopNextQueued() (*Order, error) {
-	o, err := scanOrder(s.DB.QueryRow("SELECT " + orderCols + " FROM orders WHERE status='queued' ORDER BY id ASC LIMIT 1"))
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() // no-op kalau sudah commit
+
+	o, err := scanOrder(tx.QueryRow("SELECT "+orderCols+" FROM orders WHERE status='queued' ORDER BY id ASC LIMIT 1"))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return o, err
+	if err != nil {
+		return nil, err
+	}
+	// claim: hanya kalau masih 'queued' (RowsAffected=1 = berhasil claim)
+	res, err := tx.Exec("UPDATE orders SET status='running',pesan='memproses order...',updated_at=? WHERE id=? AND status='queued'",
+		NowWIB().Format("2006-01-02 15:04:05"), o.ID)
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		// sudah diambil worker lain - coba lagi tick berikutnya
+		return nil, nil
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	o.Status = "running"
+	o.Pesan = "memproses order..."
+	return o, nil
+}
+
+// StuckRunning: order yang masih 'running' tapi sudah lama (server crash
+// di tengah jalan). Dipakai watchdog. Umur minimum = 10 menit.
+func (s *Store) StuckRunning(olderThan time.Duration) ([]*Order, error) {
+	cutoff := NowWIB().Add(-olderThan).Format("2006-01-02 15:04:05")
+	rows, err := s.DB.Query("SELECT "+orderCols+" FROM orders WHERE status='running' AND updated_at<?", cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var stuck []*Order
+	for rows.Next() {
+		o, err := scanOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		stuck = append(stuck, o)
+	}
+	return stuck, rows.Err()
+}
+
+// ListOrdersSince: order dibuat setelah timestamp tertentu (untuk backup).
+func (s *Store) ListOrdersSince(since string, limit int) ([]*Order, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.DB.Query("SELECT "+orderCols+" FROM orders WHERE created_at>? ORDER BY id ASC LIMIT ?", since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*Order
+	for rows.Next() {
+		o, err := scanOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
 }
 
 // ---------- Laporan ----------

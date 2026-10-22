@@ -71,6 +71,14 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div class="stat"><div class="n" id="rModal">-</div><div class="l">Modal</div></div>
 </div>
 <div class="card attention"><h2>Perlu perhatian</h2><div id="attentionList" class="attention-list">Memuat order...</div></div>
+<div class="card"><h2>Health server <span style="float:right;font-size:12px"><button class="sec" style="padding:5px 10px;font-size:12px" onclick="loadHealth()">🔄 Refresh</button></span></h2>
+<div class="kv"><span>Status</span><b id="hStatus">-</b></div>
+<div class="kv"><span>Uptime</span><b id="hUptime">-</b></div>
+<div class="kv"><span>Waktu server (WIB)</span><b id="hWib">-</b></div>
+<div class="kv"><span>Ukuran DB / WAL</span><b id="hDb">-</b></div>
+<div class="kv"><span>Versi</span><b id="hVer">-</b></div>
+<p><small>Endpoint publik <code>/health</code> — bisa dipakai auto-ping / monitoring.</small></p>
+</div>
 <div class="card"><h2>Order terakhir
 <span style="float:right;font-size:12px">
 <button class="sec" style="padding:5px 10px;font-size:12px" onclick="hapusHistory('failed')">🗑 Hapus Failed</button>
@@ -284,6 +292,14 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div class="grid2">
 <div><label>Folder profile Chromium</label><input id="sProfile" style="width:100%" disabled></div>
 <div></div>
+</div>
+</div>
+<div class="card">
+<h2>Backup Google Sheet</h2>
+<p><small>Order otomatis dikirim ke Google Sheet tiap 10 menit (via Apps Script webhook). Kosongkan URL = backup dimatikan.</small></p>
+<div class="grid2">
+<div><label>URL Apps Script (doPost)</label><input id="sSheetUrl" style="width:100%" placeholder="https://script.google.com/macros/s/.../exec"></div>
+<div><label>Token rahasia (opsional)</label><input id="sSheetToken" style="width:100%" placeholder="token biar cuma server ini yang bisa isi"></div>
 </div>
 </div>
 <div class="card">
@@ -561,6 +577,22 @@ async function loadReport(){
     pr.style.color=l.profit>=0?'#186a3b':'#b42318';
   }catch(e){}
 }
+async function loadHealth(){
+  try{
+    const h=await api('/health');
+    $('hStatus').textContent=h.ok?'✅ hidup':'❌ down';
+    $('hUptime').textContent=h.uptime||'-';
+    $('hWib').textContent=h.wib||'-';
+    $('hDb').textContent=fmtBytes(h.db_bytes)+' / '+fmtBytes(h.wal_bytes);
+    $('hVer').textContent=h.version||'-';
+  }catch(e){$('hStatus').textContent='❌ tidak bisa/Test: '+e.message}
+}
+function fmtBytes(n){
+  n=+n||0;
+  if(n<1024)return n+' B';
+  if(n<1048576)return (n/1024).toFixed(1)+' KB';
+  return (n/1048576).toFixed(1)+' MB';
+}
 async function loadOrders(){
   try{
     const os=await api('/api/v1/orders?limit=20');
@@ -742,6 +774,8 @@ async function loadSet(){
     $('sSaldoMin').value=s.saldo_min||'20000';
     $('sSaldoInt').value=s.saldo_interval_menit||'30';
     $('sSaldoNotifJam').value=s.saldo_notif_jam||'1';
+    $('sSheetUrl').value=s.sheet_backup_url||'';
+    $('sSheetToken').value=s.sheet_backup_token||'';
     // webhook URL = server_url + /webhook (dipakai paypan)
     $('sWebhook').value=(s.server_url||window.location.origin).replace(/\/+$/,'')+'/webhook';
     // token gak dibalikin (sensitif) - placeholder saja kalau sudah diset
@@ -785,6 +819,8 @@ async function simpanSet(){
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     if($('sSaldoInt').value)body.saldo_interval_menit=$('sSaldoInt').value.trim();
     if($('sSaldoNotifJam').value)body.saldo_notif_jam=$('sSaldoNotifJam').value.trim();
+    body.sheet_backup_url=$('sSheetUrl').value.trim();
+    body.sheet_backup_token=$('sSheetToken').value.trim();
     btn.disabled=true;btn.textContent='Menyimpan...';setStatus('Menyimpan pengaturan...','');
     const r=await api('/api/v1/settings',{method:'POST',body:JSON.stringify(body)});
     const changed=r.changed||[];
@@ -814,8 +850,8 @@ function editWebhook(){
   flash('Edit URL server di kolom atas (mis. https://agenpulsa.jhopan.my.id) lalu 💾 Simpan Pengaturan.');
 }
 $('logout').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/'};
-loadStatus();loadReport();loadOrders();loadCatalog();
-setInterval(()=>{loadStatus();loadOrders()},15000);
+loadStatus();loadReport();loadOrders();loadCatalog();loadHealth();
+setInterval(()=>{loadStatus();loadOrders();loadHealth()},15000);
 </script>
 </body>
 </html>

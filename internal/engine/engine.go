@@ -227,7 +227,10 @@ func (e *Engine) Execute(o *db.Order) {
 	}
 	_ = e.store.UpdateOrderStatus(o.ID, "running", "memproses order...", "")
 
+	// P10: ukur durasi eksekusi — log latency biar bisa lihat Lambat/CEPAt.
+	mulai := time.Now()
 	pesan, modal, orderID, ok := e.runOrder(o)
+	durasi := time.Since(mulai)
 	status := "failed"
 	if ok {
 		status = "success"
@@ -235,6 +238,7 @@ func (e *Engine) Execute(o *db.Order) {
 	_ = e.store.UpdateOrderStatus(o.ID, status, pesan, orderID)
 	e.Callback(o, status, pesan)
 	e.notifyOrder(*o, status, pesan)
+	log.Printf("[ORDER #%d] %s %s durasi=%s ref=%s nomor=%s", o.ID, status, o.Label, durasi.Round(time.Millisecond), o.Ref, o.Nomor)
 	_ = modal
 }
 

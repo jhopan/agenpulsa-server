@@ -408,3 +408,128 @@ func TestExpireBatas5Menit(t *testing.T) {
 		t.Errorf("order 4 menit harus pending_payment, dapat %q", g2.Status)
 	}
 }
+
+// TestRateLimitOrder: order endpoint dibatasi (10 per 5 menit per kunci).
+func TestRateLimitOrder(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	// seed katalog
+	it := db.CatalogItem{Label: "T", Tab: "Paket Kuota", Voucher: "1", HargaMax: 1000, HargaJual: 2000, Aktif: true}
+	if _, err := store.UpsertCatalog(&it); err != nil {
+		t.Fatal(err)
+	}
+	login := loginAdmin(t, srv)
+
+	// 11x POST catalog-like order pake session (bukan order -> biar tgak bikin invoice).
+	// Pakai endpoint order pending? butuh paypan. Jadi test limiter langsung.
+	a := api.New(store, mustEngine(t, store), testWebFS())
+	rl := a.OrderLimiterForTest()
+	for i := 0; i < 10; i++ {
+		ok, _ := rl.Allow("test-key")
+		if !ok {
+			t.Fatalf("request %d harus boleh", i+1)
+		}
+	}
+	ok, _ := rl.Allow("test-key")
+	if ok {
+		t.Error("request ke-11 harus ditolak (limit 10)")
+	}
+	// kunci lain tetap boleh
+	if ok, _ := rl.Allow("key-lain"); !ok {
+		t.Error("kunci lain harus boleh")
+	}
+	_ = login
+}
+
+// TestHealthEndpoint: /health publik tanpa API key -> 200 + ok:true.
+func TestHealthEndpoint(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	defer srv.Close()
+	r, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.StatusCode != 200 {
+		t.Fatalf("/health harus 200, got %d", r.StatusCode)
+	}
+	var out struct {
+		OK      bool   `json:"ok"`
+		Service string `json:"service"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.OK || out.Service != "agenpulsa-server" {
+		t.Errorf("health payload salah: %+v", out)
+	}
+}
+
+// TestPopNextQueuedAtomik: order queued di-claim jadi running, tidak bisa
+// diambil worker kedua (anti dobel-beli).
+func TestPopNextQueuedAtomik(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	o := &db.Order{Ref: "pop-test-1", Nomor: "081234567890", Label: "T", Status: "queued", Sumber: "api"}
+	if _, err := store.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.PopNextQueued()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("harus dapat order queued")
+	}
+	if got.Status != "running" {
+		t.Errorf("order harus di-claim jadi running, dapat %q", got.Status)
+	}
+	// worker kedua: tidak boleh dapat order yang sama
+	got2, err := store.PopNextQueued()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2 != nil {
+		t.Errorf("worker kedua jangan dapat order yang sama (dobel-beli): %+v", got2)
+	}
+}
+
+// TestWatchdogOrderNyangkut: order 'running' lebih dari 10 menit -> failed
+// (TIDAK di-retry — cukup notifikasi admin).
+func TestWatchdogOrderNyangkut(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	lama := db.NowWIB().Add(-30 * time.Minute).Format("2006-01-02 15:04:05")
+	o := &db.Order{
+		Ref: "stuck-1", Nomor: "081234567890", Label: "T",
+		Status: "running", Pesan: "memproses order...", Sumber: "api",
+		CreatedAt: lama, UpdatedAt: lama,
+	}
+	if _, err := store.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	// order baru (belum 10 menit) harus tetap running
+	baru := db.NowWIB().Format("2006-01-02 15:04:05")
+	o2 := &db.Order{
+		Ref: "stuck-2", Nomor: "081234567891", Label: "T",
+		Status: "running", Pesan: "memproses order...", Sumber: "api",
+		CreatedAt: baru, UpdatedAt: baru,
+	}
+	if _, err := store.CreateOrder(o2); err != nil {
+		t.Fatal(err)
+	}
+
+	a := api.New(store, mustEngine(t, store), testWebFS())
+	a.WatchdogTickForTest()
+
+	g1, _ := store.GetOrderByRef("stuck-1")
+	if g1.Status != "failed" {
+		t.Errorf("order nyangkut harus failed, dapat %q", g1.Status)
+	}
+	g2, _ := store.GetOrderByRef("stuck-2")
+	if g2.Status != "running" {
+		t.Errorf("order baru harus tetap running, dapat %q", g2.Status)
+	}
+}

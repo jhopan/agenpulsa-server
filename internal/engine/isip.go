@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,7 +12,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
+
+// isipTimeout: batas waktu panggil helper isip_api.py. Tanpa timeout, satu
+// order yang nge-hang (mis. Cloudflare challenge) memblokir SELURUH worker —
+// queue tertahan, order lain menumpuk.
+const isipTimeout = 120 * time.Second
 
 type isipResult struct {
 	OK     bool   `json:"ok"`
@@ -58,8 +65,17 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 		}
 	}
 	full := append([]string{helper}, args...) // subcommand dulu, --profile sesudahnya
-	cmd := exec.Command(py, full...)
+	// Context + timeout + kill process group: python/Playwright yg nge-hang
+	// harus dibunuh, bukan nunggu selamanya.
+	ctx, cancel := context.WithTimeout(context.Background(), isipTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, py, full...)
+	setProcGroup(cmd)
 	outBytes, err := cmd.Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		log.Printf("[ISIP %v] TIMEOUT %s — helper dibunuh", args, isipTimeout)
+		return nil, fmt.Errorf("isip_api timeout %s (helper macet, sudah dibunuh)", isipTimeout)
+	}
 	if err != nil {
 		// helper exit 1 saat gagal, tapi stdout tetap JSON yang valid — parse itu.
 		var res isipResult
@@ -149,3 +165,6 @@ func (e *Engine) IsipInject(jsonFile string) (int, error) {
 	}
 	return r.Jumlah, nil
 }
+
+// IsipTimeoutSeconds: batas waktu helper dalam detik (untuk monitoring/test).
+func IsipTimeoutSeconds() int { return int(isipTimeout.Seconds()) }

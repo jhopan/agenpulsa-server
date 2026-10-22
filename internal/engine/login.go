@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -361,13 +362,13 @@ func (s *LoginSession) forceStop() {
 
 // outboundIP IP LAN yang dipakai route default (ala menu.py lama).
 func outboundIP() string {
-	out, err := exec.Command("sh", "-c", "ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \\([^ ]*\\).*/\\1/p' | head -n 1").Output()
+	out, err := runCmd(5*time.Second, "sh", "-c", "ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \\([^ ]*\\).*/\\1/p' | head -n 1")
 	if err != nil || len(strings.TrimSpace(string(out))) == 0 {
 		// Windows fallback: hostname -I tidak ada; pakai ipconfig sederhana.
 		if runtime.GOOS == "windows" {
 			return "localhost"
 		}
-		out, _ = exec.Command("hostname", "-I").Output()
+		out, _ = runCmd(5*time.Second, "hostname", "-I")
 		if len(strings.TrimSpace(string(out))) == 0 {
 			return "IP-SERVER"
 		}
@@ -388,7 +389,7 @@ func startVNCStack(profile string) (*vncStack, error) {
 	vs := &vncStack{passFile: passFile, deadline: time.Now().Add(vncTimeout)}
 
 	// 1. Xvfb :99 (matikan dulu kalau nyangkut dari run sebelumnya).
-	_ = exec.Command("pkill", "-f", "Xvfb :99").Run()
+	_, _ = runCmd(10*time.Second, "pkill", "-f", "Xvfb :99")
 	time.Sleep(300 * time.Millisecond)
 	vs.display = exec.Command("Xvfb", vncDisplay, "-screen", "0", "1366x900x24", "-nolisten", "tcp")
 	if err := vs.display.Start(); err != nil {
@@ -459,7 +460,7 @@ func ensureVNCPass() (string, error) {
 	if _, err := exec.LookPath("x11vnc"); err != nil {
 		return "", fmt.Errorf("x11vnc tidak ada untuk -storepasswd")
 	}
-	out, err := exec.Command("x11vnc", "-storepasswd", vncPassword, passFile).CombinedOutput()
+	out, err := runCmd(15*time.Second, "x11vnc", "-storepasswd", vncPassword, passFile)
 	if err != nil {
 		return "", fmt.Errorf("storepasswd gagal: %v: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -474,5 +475,19 @@ func (vs *vncStack) stop() {
 			_ = c.Wait()
 		}
 	}
-	_ = exec.Command("pkill", "-f", "Xvfb :99").Run()
+	_, _ = runCmd(10*time.Second, "pkill", "-f", "Xvfb :99")
+}
+
+// runCmd: jalankan command dengan batas waktu. Tanpa timeout, command yang
+// macet (mis. Xvfb / pkill) = goroutine leak yang menumpuk sampai server
+// kehabisan resource.
+func runCmd(timeout time.Duration, name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return string(out), fmt.Errorf("%s timeout %s", name, timeout)
+	}
+	return string(out), err
 }

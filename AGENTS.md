@@ -105,6 +105,31 @@ Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan 
 - Harga naik: bila harga real-time > `harga_max` katalog → order batal.
 - Login habis: order gagal dengan pesan jelas; cek `GET /api/v1/status`.
 - Nomor dinormalisasi (`62 877-` → `0877...`) sebelum masuk order.
+- **Provider**: prefix nomor harus cocok operator paket (katalog kolom `operator`);
+  beda → order dibatalkan sebelum saldo kepotong.
+- **Expire 5 menit**: order `pending_payment` lewat `created_at + 5m` → `failed`
+  ("expired — tidak dibayar dalam 5 menit"). Murni server, TIDAK bergantung
+  Paypan. Reconcile loop tiap 15 detik. Webhook `order.paid` yang datang
+  setelah expire → order diproses ulang (bayar terlambat, jangan diamkan).
+- **Rate limit order**: 10 request / 5 menit per API key (atau per IP kalau tanpa key).
+- response 429 + header `X-RateLimit-Remaining`.
+- **Watchdog**: order `running` > 10 menit (server crash) → `failed` + notif
+  Telegram. **TIDAK** di-retry (biar aman, admin beli manual).
+
+## Stabilitas & monitoring
+
+| Fitur | Detail |
+|---|---|
+| Timeout helper isipulsa | 120 detik + kill process group (order yg hang tak memblokir worker) |
+| Claim order atomik | `PopNextQueued` claim `queued`→`running` dalam 1 transaksi (anti dobel-beli) |
+| WAL checkpoint | `wal_autocheckpoint=1000` + checkpoint TRUNCATE tiap 5 menit (WAL tak membengkak) |
+| Health check | `GET /health` (publik, tanpa API key) — status, uptime, ukuran DB/WAL, versi |
+| Rate limit | 10 order / 5 menit per kunci; peta disapu tiap 5 menit |
+| Backup Google Sheet | order dikirim ke Apps Script webhook tiap 10 menit (`sheet_backup_url`); template: `helper/sheet_backup_appsscript.js` |
+| Log latency | `[ORDER #id] <status> durasi=...` tiap order selesai |
+| Exec timeout | semua `exec.Command` punya batas waktu (goroutine leak) |
+
+Endpoint health juga dipakai auto-ping: `https://agenpulsa.jhopan.my.id/health`.
 
 ## Verifikasi
 

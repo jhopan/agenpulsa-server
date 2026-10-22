@@ -52,8 +52,12 @@ func (s *Scheduler) tick() {
 			}
 		case "sekali":
 			if s.matchOnce(&sc, now) {
-				s.fire(&sc, now)
-				_ = s.store.DeleteSchedule(sc.ID) // sekali pakai
+				// hapus hanya kalau order benar-benar masuk antrian; kalau
+				// gagal (katalog hilang) schedule tetap ada supaya user
+				// tidak bayar tapi tidak dapat apa-apa.
+				if s.fire(&sc, now) {
+					_ = s.store.DeleteSchedule(sc.ID) // sekali pakai
+				}
 			}
 		}
 	}
@@ -100,12 +104,15 @@ func (s *Scheduler) matchOnce(sc *db.Schedule, now time.Time) bool {
 }
 
 // fire buat order dari jadwal (masuk queue normal).
-func (s *Scheduler) fire(sc *db.Schedule, now time.Time) {
+// fire: buat order dari jadwal. Return true kalau order berhasil diantri.
+// Return false kalau gagal (katalog hilang / enqueue error) — schedule 'sekali'
+// TIDAK dihapus kalau gagal, supaya user gak bayar tapi gak dapat apa-apa.
+func (s *Scheduler) fire(sc *db.Schedule, now time.Time) bool {
 	// Hindari dobel: kalau sudah jalan menit yang sama, skip.
 	last := s.store.GetSetting("sched_last_"+strconv.FormatInt(sc.ID, 10), "")
 	minuteKey := now.Format("2006-01-02 15:04")
 	if last == minuteKey {
-		return
+		return true // sudah diproses menit ini
 	}
 	_ = s.store.SetSetting("sched_last_"+strconv.FormatInt(sc.ID, 10), minuteKey)
 
@@ -125,16 +132,19 @@ func (s *Scheduler) fire(sc *db.Schedule, now time.Time) {
 		o.HargaJual = it.HargaJual
 	}
 	if o.Ref == "" {
-		return
+		return false
 	}
 	if err := s.eng.Enqueue(o); err != nil {
 		log.Printf("scheduler enqueue: %v", err)
-		return
+		// reset penanda supaya bisa dicoba lagi menit berikutnya
+		_ = s.store.SetSetting("sched_last_"+strconv.FormatInt(sc.ID, 10), "")
+		return false
 	}
 	if sc.Tipe == "interval" {
 		_ = s.store.SetScheduleLastRun(sc.ID, now.Format("2006-01-02"))
 	}
 	log.Printf("[JADWAL %s WIB] %s -> order #%d antri", sc.Jam, sc.Label, o.ID)
+	return true
 }
 
 func fmtSched(id int64, minute string) string {
