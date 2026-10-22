@@ -495,9 +495,10 @@ type orderReq struct {
 	Sumber      string `json:"sumber"`
 	ChatID      string `json:"chat_id"`
 	CallbackURL string `json:"callback_url"`
+	ClientID    string `json:"client_id"` // identitas user: tg:<chat_id> / wa:<jid>
 }
 
-func (a *API) buildOrder(req *orderReq, defaultSumber string, clientIP string) (*db.Order, error) {
+func (a *API) buildOrder(req *orderReq, defaultSumber string, clientID string) (*db.Order, error) {
 	nomor := NormalizeNomor(req.Nomor)
 	if nomor == "" {
 		return nil, fmt.Errorf("nomor tidak valid (butuh format 08xxx / 62xxx)")
@@ -508,7 +509,7 @@ func (a *API) buildOrder(req *orderReq, defaultSumber string, clientIP string) (
 		CatalogID:   req.CatalogID,
 		Status:      "queued",
 		Sumber:      defaultSumber,
-		ClientIP:    clientIP,
+		ClientID:    clientID,
 		ChatID:      req.ChatID,
 		CallbackURL: req.CallbackURL,
 	}
@@ -558,7 +559,7 @@ func (a *API) createOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	o, err := a.buildOrder(req, "api", a.clientIP(r))
+	o, err := a.buildOrder(req, "api", a.clientID(r))
 	if err != nil {
 		jsonErr(w, 400, err.Error())
 		return
@@ -588,7 +589,10 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, exist)
 		return
 	}
-	o, err := a.buildOrder(req, "paypan", a.clientIP(r))
+	o, err := a.buildOrder(req, "paypan", a.clientID(r))
+	if req.ClientID != "" {
+		o.ClientID = req.ClientID
+	}
 	if err != nil {
 		jsonErr(w, 400, err.Error())
 		return

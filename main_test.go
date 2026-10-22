@@ -535,9 +535,9 @@ func TestWatchdogOrderNyangkut(t *testing.T) {
 	}
 }
 
-// TestLimitOrderAktifPerLokasi: lokasi dengan 3 order aktif -> order ke-4
+// TestLimitOrderAktifPerUser: user dengan 3 order aktif -> order ke-4
 // ditolak (429). Lokasi lain tetap boleh.
-func TestLimitOrderAktifPerLokasi(t *testing.T) {
+func TestLimitOrderAktifPerUser(t *testing.T) {
 	srv, store, _ := newTestServer(t)
 	defer srv.Close()
 
@@ -547,34 +547,34 @@ func TestLimitOrderAktifPerLokasi(t *testing.T) {
 	}
 	login := loginAdmin(t, srv)
 
-	// 3 order aktif dari IP yang sama
+	// 3 order aktif dari user yang sama
 	for i := 0; i < 3; i++ {
 		o := &db.Order{
 			Ref: "ip-lim-" + strconv.Itoa(i), Nomor: "081234567890", Label: "T",
-			Status: "pending_payment", Sumber: "api", ClientIP: "1.2.3.4",
+			Status: "pending_payment", Sumber: "api", ClientID: "tg:111",
 		}
 		if _, err := store.CreateOrder(o); err != nil {
 			t.Fatal(err)
 		}
 	}
-	n, err := store.CountActiveByIP("1.2.3.4")
+	n, err := store.CountActiveByClient("tg:111")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n != 3 {
 		t.Errorf("harus ada 3 order aktif, dapat %d", n)
 	}
-	// lokasi lain = 0
-	n2, _ := store.CountActiveByIP("5.6.7.8")
+	// user lain = 0
+	n2, _ := store.CountActiveByClient("tg:222")
 	if n2 != 0 {
-		t.Errorf("lokasi lain harus 0, dapat %d", n2)
+		t.Errorf("user lain harus 0, dapat %d", n2)
 	}
-	// order ke-4 dari IP yang sama -> 429
+	// order ke-4 dari user yang sama -> 429
 	body := `{"catalog_id":1,"nomor":"081234567890"}`
 	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/orders/pending", strings.NewReader(body))
 	req.AddCookie(login)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	req.Header.Set("X-Client-Id", "tg:111")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -586,13 +586,13 @@ func TestLimitOrderAktifPerLokasi(t *testing.T) {
 	req2, _ := http.NewRequest("POST", srv.URL+"/api/v1/orders/pending", strings.NewReader(body))
 	req2.AddCookie(login)
 	req2.Header.Set("Content-Type", "application/json")
-	req2.Header.Set("X-Forwarded-For", "5.6.7.8")
+	req2.Header.Set("X-Client-Id", "tg:222")
 	res2, err := http.DefaultClient.Do(req2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res2.StatusCode == 429 {
-		t.Error("lokasi lain harusnya boleh order")
+		t.Error("user lain harusnya boleh order")
 	}
 }
 
@@ -604,14 +604,14 @@ func TestOrderStatusEndpoint(t *testing.T) {
 
 	o := &db.Order{
 		Ref: "st-1", Nomor: "081234567890", Label: "T",
-		Status: "pending_payment", Sumber: "api", ClientIP: "9.9.9.9", HargaJual: 6500,
+		Status: "pending_payment", Sumber: "api", ClientID: "tg:333", HargaJual: 6500,
 	}
 	if _, err := store.CreateOrder(o); err != nil {
 		t.Fatal(err)
 	}
 	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/order-status", nil)
 	req.AddCookie(login)
-	req.Header.Set("X-Forwarded-For", "9.9.9.9")
+	req.Header.Set("X-Client-Id", "tg:333")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

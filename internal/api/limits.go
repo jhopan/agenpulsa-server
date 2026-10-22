@@ -2,7 +2,9 @@
 package api
 
 import (
-	"net"
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -71,26 +73,29 @@ func (rl *rateLimiter) sweep() {
 	}
 }
 
-// maxActiveOrderPerIP: maksimal order AKTIF (pending_payment/queued/running)
-// per lokasi. Kalau sudah penuh -> order baru DITOLAK dan user diminta nunggu
-// salah satu order yang sedang jalan selesai. Ini yang bikin bot tinggal
-// "hit API buat cek" tanpa bikin antrian numpuk.
-const maxActiveOrderPerIP = 3
+// maxActiveOrderPerUser: maksimal order AKTIF (pending_payment/queued/running)
+// per identitas user. Kalau sudah penuh -> order baru DITOLAK, user diminta
+// nunggu salah satu order yang sedang jalan selesai.
+//
+// Identitas = client_id dari order (tg:<chat_id> / wa:<jid> / admin:<key>).
+// BUKAN IP: banyak user Telegram/WA satu IP (WiFi/NAT) — limit per IP bisa
+// memblok orang yang beda.
+const maxActiveOrderPerUser = 3
 
-// limitActiveOrder: middleware sebelum buat order. Kalau lokasi sudah punya
-// maxActiveOrderPerIP order aktif -> 429 (dengan sisa/status biar bot tahu).
+// limitActiveOrder: middleware sebelum buat order. Kalau user sudah punya
+// maxActiveOrderPerUser order aktif -> 429 (dengan sisa/status biar bot tahu).
 func (a *API) limitActiveOrder(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := a.clientIP(r)
-		n, err := a.store.CountActiveByIP(ip)
+		cid := a.clientID(r)
+		n, err := a.store.CountActiveByClient(cid)
 		if err != nil {
 			next(w, r) // DB error -> jangan blokir order
 			return
 		}
-		if n >= maxActiveOrderPerIP {
+		if n >= maxActiveOrderPerUser {
 			w.Header().Set("Retry-After", "60")
 			w.Header().Set("X-Active-Orders", strconv.Itoa(n))
-			jsonErr(w, 429, "lokasi kamu masih punya "+strconv.Itoa(n)+" order aktif (maks "+strconv.Itoa(maxActiveOrderPerIP)+") — tunggu salah satu selesai, lalu ulangi")
+			jsonErr(w, 429, "kamu masih punya "+strconv.Itoa(n)+" order aktif (maks "+strconv.Itoa(maxActiveOrderPerUser)+") — tunggu salah satu selesai, lalu ulangi")
 			return
 		}
 		w.Header().Set("X-Active-Orders", strconv.Itoa(n))
@@ -98,26 +103,36 @@ func (a *API) limitActiveOrder(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// clientIP: IP client. Kalau lewat proxy (CF tunnel) pakai X-Forwarded-For.
-func (a *API) clientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		return strings.TrimSpace(strings.Split(fwd, ",")[0])
+// clientID: identitas user untuk limit order aktif.
+// Prioritas: body "client_id" (bot kirim) -> header X-Client-Id -> "anon".
+//
+// PENTING: bukan IP. Banyak user Telegram/WA di satu IP (WiFirum/NAT) —
+// limit per IP bisa memblok orang yang beda.
+func (a *API) clientID(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get("X-Client-Id")); v != "" {
+		return v
 	}
-	if r.Header.Get("CF-Connecting-IP") != "" {
-		return strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))
+	// body: dibaca ulang (Body cuma bisa dibaca sekali -> restore).
+	if r.Body != nil && r.Method == http.MethodPost {
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		var probe struct {
+			ClientID string `json:"client_id"`
+		}
+		if err := json.Unmarshal(body, &probe); err == nil {
+			if v := strings.TrimSpace(probe.ClientID); v != "" {
+				return v
+			}
+		}
 	}
-	ip := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
-	}
-	return ip
+	return "anon"
 }
 
 // orderStatus: status antrian untuk bot (cek via API). Menjawab: berapa order
-// aktif dari lokasi ini, dan daftar statusnya.
+// aktif dari user ini, dan daftar order pending-nya.
 func (a *API) orderStatus(w http.ResponseWriter, r *http.Request) {
-	ip := a.clientIP(r)
-	n, err := a.store.CountActiveByIP(ip)
+	cid := a.clientID(r)
+	n, err := a.store.CountActiveByClient(cid)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -127,10 +142,10 @@ func (a *API) orderStatus(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	// filter hanya order milik lokasi ini
+	// filter hanya order milik user ini
 	var mine []*db.Order
 	for _, o := range pending {
-		if o.ClientIP == ip {
+		if o.ClientID == cid {
 			mine = append(mine, o)
 		}
 	}
@@ -142,27 +157,12 @@ func (a *API) orderStatus(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, 200, map[string]any{
-		"ip":            ip,
-		"aktif":         n,
-		"maks":          maxActiveOrderPerIP,
-		"bisa_order":    n < maxActiveOrderPerIP,
+		"client_id":    cid,
+		"aktif":        n,
+		"maks":         maxActiveOrderPerUser,
+		"bisa_order":   n < maxActiveOrderPerUser,
 		"order_pending": out,
 	})
-}
-
-// rateKey: API key kalau ada, else IPRemote (proxy: pakai X-Forwarded-For).
-func (a *API) rateKey(r *http.Request) string {
-	if k := strings.TrimSpace(r.Header.Get("X-API-Key")); k != "" {
-		return "key:" + k
-	}
-	ip := r.RemoteAddr
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		ip = strings.TrimSpace(strings.Split(fwd, ",")[0])
-	}
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
-	}
-	return "ip:" + ip
 }
 
 // StartRateLimitSweep: bersihkan peta rate limit tiap 5 menit.

@@ -22,6 +22,7 @@ type langgananReq struct {
 	Interval  int    `json:"interval_hari"`
 	ChatID    string `json:"chat_id"` // opsional: receipt ke WA/TG customer
 	Callback  string `json:"callback_url"`
+	ClientID  string `json:"client_id"` // identitas user: tg:<chat_id> / wa:<jid>
 }
 
 // status jadwal langganan: simpan di schedules.aktif=1, dengan chat_id
@@ -103,7 +104,7 @@ func (a *API) langgananBaru(w http.ResponseWriter, r *http.Request) {
 		Status:      "pending_payment",
 		InvoiceID:   inv.ID,
 		ExpiresAt:   inv.ExpiresAt, // deadline bayar (unix) — expire lokal 5 menit
-		ClientIP:    a.clientIP(r), // lokasi client (limit order aktif)
+		ClientID:    langgananClientID(req.ClientID, a.clientID(r)), // identitas user (limit order aktif)
 		Sumber:      "langganan",
 		ChatID:      req.ChatID,
 		CallbackURL: req.Callback,
@@ -167,3 +168,11 @@ type langgananErr string
 func (e langgananErr) Error() string { return string(e) }
 
 const errLanggananDetail = langgananErr("detail jadwal tidak ditemukan di order")
+
+// langgananClientID: identitas user dari body (bot) atau fallback dari request.
+func langgananClientID(dariBody, fallback string) string {
+	if v := strings.TrimSpace(dariBody); v != "" {
+		return v
+	}
+	return fallback
+}

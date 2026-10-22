@@ -111,8 +111,10 @@ Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan 
   ("expired — tidak dibayar dalam 5 menit"). Murni server, TIDAK bergantung
   Paypan. Reconcile loop tiap 15 detik. Webhook `order.paid` yang datang
   setelah expire → order diproses ulang (bayar terlambat, jangan diamkan).
-- **Rate limit order**: 10 request / 5 menit per API key (atau per IP kalau tanpa key).
-- response 429 + header `X-RateLimit-Remaining`.
+- **Limit order aktif**: maksimal 3 order aktif (`pending_payment`/`queued`/`running`)
+  per **identitas user** (`client_id`: `tg:<chat_id>` / `wa:<jid>`) — BUKAN per IP
+  (banyak user satu WiFi/NAT). Penuh → 429 "kamu masih punya 3 order aktif".
+  Bot cek dulu: `GET /api/v1/order-status` → `{aktif, maks, bisa_order, order_pending}`.
 - **Watchdog**: order `running` > 10 menit (server crash) → `failed` + notif
   Telegram. **TIDAK** di-retry (biar aman, admin beli manual).
 

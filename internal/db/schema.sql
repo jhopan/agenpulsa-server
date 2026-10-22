@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS orders (
     invoice_id TEXT,                        -- id invoice paypan (pending_payment)
     expires_at INTEGER NOT NULL DEFAULT 0, -- unix deadline bayar invoice (0 = tak terbatas)
     sumber TEXT NOT NULL DEFAULT 'api',     -- api|telegram|wa|paypan|admin|scheduler
-    client_ip TEXT,                          -- lokasi client (limit order aktif)
+    client_id TEXT,                          -- identitas user (tg:<chat_id> / wa:<jid>) - limit order aktif
     chat_id TEXT,                           -- untuk callback ke client
     callback_url TEXT,
     created_at TEXT NOT NULL,               -- WIB ISO
