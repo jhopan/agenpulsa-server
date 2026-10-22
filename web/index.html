@@ -295,6 +295,18 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 </div>
 </div>
 <div class="card">
+<h2>Channel Publik (Testimoni) <span class="badge">tanpa nomor HP</span></h2>
+<p><small>Transaksi sukses dikirim ke bot/channel PUBLIK (bisa dibaca orang lain) — <b>tanpa nomor HP, ref, dan data pribadi</b>. Pakai bot token terpisah dari bot admin.</small></p>
+<div class="grid2">
+<div><label>Bot token publik (@BotFather)</label><input id="sPubToken" style="width:100%" placeholder="1234567890:AAxxxx..."></div>
+<div><label>Chat / channel tujuan</label><input id="sPubChat" style="width:100%" placeholder="-1001234567890 (channel) atau chat id"></div>
+</div>
+<div class="grid2">
+<div><label>Status yang dikirim (pisah koma)</label><input id="sPubStatus" style="width:100%" placeholder="success"></div>
+<div></div>
+</div>
+</div>
+<div class="card">
 <h2>Backup Google Sheet</h2>
 <p><small>Order otomatis dikirim ke Google Sheet tiap 10 menit (via Apps Script webhook). Kosongkan URL = backup dimatikan.</small></p>
 <div class="grid2">
@@ -774,6 +786,9 @@ async function loadSet(){
     $('sSaldoMin').value=s.saldo_min||'20000';
     $('sSaldoInt').value=s.saldo_interval_menit||'30';
     $('sSaldoNotifJam').value=s.saldo_notif_jam||'1';
+    $('sPubToken').value=s.bot_public_token||'';
+    $('sPubChat').value=s.bot_public_chat_id||'';
+    $('sPubStatus').value=s.notif_public_status||'success';
     $('sSheetUrl').value=s.sheet_backup_url||'';
     $('sSheetToken').value=s.sheet_backup_token||'';
     // webhook URL = server_url + /webhook (dipakai paypan)
@@ -819,6 +834,9 @@ async function simpanSet(){
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     if($('sSaldoInt').value)body.saldo_interval_menit=$('sSaldoInt').value.trim();
     if($('sSaldoNotifJam').value)body.saldo_notif_jam=$('sSaldoNotifJam').value.trim();
+    body.bot_public_token=$('sPubToken').value.trim();
+    body.bot_public_chat_id=$('sPubChat').value.trim();
+    body.notif_public_status=$('sPubStatus').value.trim();
     body.sheet_backup_url=$('sSheetUrl').value.trim();
     body.sheet_backup_token=$('sSheetToken').value.trim();
     btn.disabled=true;btn.textContent='Menyimpan...';setStatus('Menyimpan pengaturan...','');

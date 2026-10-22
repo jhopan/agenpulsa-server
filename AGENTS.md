@@ -118,6 +118,19 @@ Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan 
 - **Watchdog**: order `running` > 10 menit (server crash) → `failed` + notif
   Telegram. **TIDAK** di-retry (biar aman, admin beli manual).
 
+## Channel notifikasi (2 channel)
+
+| Channel | Tujuan | Isi | Setting |
+|---|---|---|---|
+| **Admin** | owner (privat) | lengkap: nomor, ref, modal, profit, pesan error | `bot_tg_token` + `bot_admin_id` |
+| **Publik** | testimoni/voice (bisa dibaca orang lain) | **tanpa nomor HP, ref, data pribadi** — cuma paket + harga + waktu | `bot_public_token` + `bot_public_chat_id` |
+
+- Channel publik = bot token TERPISAH (bot testimoni), status default `success`.
+  Ganti status via `notif_public_status` (pisah koma, mis. `success,failed`).
+- Keamanan: nomor HP/ref di-hardcode TIDAK dimasukin ke pesan publik. Label order
+  yang kebetulan nyimpen nomor (mis. `LANGGANAN 0878... (sched-...)`) disensor
+  `bersihkanNomor()`. Test: `TestNotifPublicTanpaNomor`.
+
 ## Stabilitas & monitoring
 
 | Fitur | Detail |

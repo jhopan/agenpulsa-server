@@ -42,9 +42,14 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 		startedAt:    time.Now(),
 		version:      "1.2.0",
 	}
-	// notif hasil order berbayar -> Telegram admin (kalau bot dikonfigurasi).
+	// notif hasil order -> 2 channel:
+	//  - admin  : lengkap (nomor, ref, modal, profit, pesan error)
+	//  - publik : bersih (paket + harga + waktu, TANPA nomor/data pribadi)
 	eng.Notifier = func(o db.Order, status, pesan string) {
 		a.TgNotify(formatOrderNotif(&o, status, pesan))
+		if a.notifPublicStatus(status) {
+			a.TgNotifyPublic(formatOrderNotifPublic(&o, status, pesan))
+		}
 	}
 	return a
 }
@@ -808,3 +813,19 @@ func (a *API) failStuckOrder(o *db.Order, alasan string) {
 
 // WatchdogTickForTest: paksa 1x tick watchdog (buat test).
 func (a *API) WatchdogTickForTest() { a.watchdogTick() }
+
+// notifPublicStatus: status mana yang dikirim ke channel publik.
+// Default: hanya "success" (testimoni). Bisa diubah via setting
+// notif_public_status (pisah koma, mis. "success,failed").
+func (a *API) notifPublicStatus(status string) bool {
+	raw := strings.TrimSpace(a.store.GetSetting("notif_public_status", ""))
+	if raw == "" {
+		return status == "success"
+	}
+	for _, v := range strings.Split(raw, ",") {
+		if strings.TrimSpace(strings.ToLower(v)) == status {
+			return true
+		}
+	}
+	return false
+}

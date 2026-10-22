@@ -636,3 +636,40 @@ func TestOrderStatusEndpoint(t *testing.T) {
 		t.Error("bisa_order harus true (aktif < maks)")
 	}
 }
+
+// TestNotifPublicTanpaNomor: pesan channel publik tidak boleh bocor nomor HP
+// maupun ref — walau label order ikut nyimpen nomor.
+func TestNotifPublicTanpaNomor(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	_ = api.New(store, mustEngine(t, store), testWebFS())
+	o := &db.Order{
+		Ref: "pend-abc123", Nomor: "087832618926", Label: "Kuota Game 1GB, 30 Hari",
+		Status: "success", HargaJual: 6500, Modal: 4550,
+		CreatedAt: "2026-10-22 12:00:00",
+	}
+	msg := api.FormatOrderNotifPublicForTest(o, "success", "ORDER SUKSES. Paket: Cek Hutang Pulsa")
+	for _, forbidden := range []string{"087832618926", "87832618926", "pend-abc123", "abc123"} {
+		if strings.Contains(msg, forbidden) {
+			t.Errorf("pesan publik bocor %q:\n%s", forbidden, msg)
+		}
+	}
+	if !strings.Contains(msg, "Kuota Game") {
+		t.Errorf("pesan publik harus tetap berisi nama paket:\n%s", msg)
+	}
+	if !strings.Contains(msg, "6.500") && !strings.Contains(msg, "6500") {
+		t.Errorf("pesan publik harus berisi harga:\n%s", msg)
+	}
+
+	// label yg mengandung nomor (khasus scheduler) -> harus disensor
+	o2 := &db.Order{
+		Ref: "sched-3-2026-10-22T07:00", Nomor: "087832618926",
+		Label: "LANGGANAN 087832618926 (sched-3-2026-10-22T07:00)",
+		Status: "success", HargaJual: 6500,
+	}
+	msg2 := api.FormatOrderNotifPublicForTest(o2, "success", "")
+	if strings.Contains(msg2, "087832618926") {
+		t.Errorf("nomor bocor dari label:\n%s", msg2)
+	}
+}

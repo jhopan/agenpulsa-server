@@ -132,6 +132,11 @@ var settingKeys = map[string]bool{
 	"saldo_notif_jam":      true, // ulang notif saldo tiap N jam (default 1)
 	"sheet_backup_url":     true, // URL Apps Script untuk backup order ke Google Sheet
 	"sheet_backup_token":   true, // token rahasia biar sheet cuma bisa diisi server ini
+	// Channel notifikasi PUBLIK (testimoni): token bot + chat/channel tujuan.
+	// Isi order di channel ini TANPA nomor HP (bukti transaksi, bukan data pribadi).
+	"bot_public_token":    true,
+	"bot_public_chat_id":  true,
+	"notif_public_status": true, // status mana yang dikirim ke channel publik (default: success)
 }
 
 // tambahKey: buat/upsert API key client (admin only).
