@@ -136,6 +136,7 @@ var settingKeys = map[string]bool{
 	// Isi order di channel ini TANPA nomor HP (bukti transaksi, bukan data pribadi).
 	"bot_public_token":    true,
 	"bot_public_chat_id":  true,
+	"bot_public_thread_id": true, // topik (message_thread_id) di supergroup forum
 	"notif_public_status": true, // status mana yang dikirim ke channel publik (default: success)
 }
 

@@ -108,16 +108,22 @@ func (a *API) TgNotifyPublic(pesan string) {
 	if token == "" || chatID == "" {
 		return // channel publik belum diset — diam
 	}
+	// Topik di supergroup forum: message_thread_id (opsional). Kalau diisi,
+	// pesan dikirim ke topik tsb, bukan general.
+	form := url.Values{
+		"chat_id":    {chatID},
+		"text":       {pesan},
+		"parse_mode": {"Markdown"},
+	}
+	if th := strings.TrimSpace(a.store.GetSetting("bot_public_thread_id", "")); th != "" {
+		form.Set("message_thread_id", th)
+	}
 	go func() {
 		defer func() { _ = recover() }()
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.PostForm(
 			"https://api.telegram.org/bot"+token+"/sendMessage",
-			url.Values{
-				"chat_id":    {chatID},
-				"text":       {pesan},
-				"parse_mode": {"Markdown"},
-			},
+			form,
 		)
 		if err != nil {
 			log.Printf("[TG PUBLIC] gagal kirim: %v", err)
