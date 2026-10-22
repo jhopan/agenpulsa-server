@@ -122,8 +122,12 @@ Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan 
 
 | Channel | Tujuan | Isi | Setting |
 |---|---|---|---|
-| **Admin** | owner (privat) | lengkap: nomor, ref, modal, profit, pesan error | `bot_tg_token` + `bot_admin_id` |
-| **Publik** | testimoni/voice (bisa dibaca orang lain) | **tanpa nomor HP, ref, data pribadi** — cuma paket + harga + waktu | `bot_public_token` + `bot_public_chat_id` |
+| **Admin** | owner (privat) | lengkap: nomor, ref, modal, profit, pesan error | `bot_tg_token` + `bot_admin_id` (**whitelist**, pisah koma) + `bot_admin_thread_id` (topik, opsional) |
+| **Publik** | testimoni/voice (bisa dibaca orang lain) | **tanpa nomor HP, ref, data pribadi** — cuma paket + harga + waktu | `bot_public_token` + `bot_public_chat_id` + `bot_public_thread_id` (topik, opsional) |
+
+- **Whitelist admin**: notif lengkap hanya dikirim ke chat ID yang terdaftar di
+  `bot_admin_id` (bisa banyak, pisah koma). Kalau bot admin kena add ke grup lain,
+  chat itu TIDAK menerima notif karena bukan whitelist.
 
 - Channel publik = bot token TERPISAH (bot testimoni), status default `success`.
   Ganti status via `notif_public_status` (pisah koma, mis. `success,failed`).

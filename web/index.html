@@ -320,12 +320,17 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div class="btnrow" style="margin-top:0"><button class="sec" type="button" onclick="bukaDialog('telegramGuide')">Panduan Telegram</button></div>
 <div class="grid2">
 <div><label>Bot token (@BotFather)</label><input id="sBotToken" style="width:100%" placeholder="1234567890:AAxxxx..."></div>
-<div><label>ID Telegram admin (penerima notif)</label><input id="sBotAdmin" style="width:100%" placeholder="123456789"></div>
+<div><label>Whitelist chat ID penerima notif lengkap <small>(pisah koma)</small></label><input id="sBotAdmin" style="width:100%" placeholder="1491946180, -1001234567890"></div>
 </div>
 <div class="grid2">
 <div><label>Ambang alert saldo (Rp)</label><input id="sSaldoMin" type="number" min="0" step="1000" style="width:100%" placeholder="20000"></div>
 <div><label>Interval cek saldo (menit, 5-1440)</label><input id="sSaldoInt" type="number" min="5" max="1440" step="5" style="width:100%" placeholder="30"></div>
 </div>
+<div class="grid2">
+<div><label>Topik notif admin di supergroup (opsional)</label><input id="sAdminThread" style="width:100%" placeholder="message_thread_id, mis. 15"></div>
+<div></div>
+</div>
+<p><small>Notif <b>lengkap</b> (nomor, ref, modal, profit) hanya dikirim ke chat ID di whitelist di atas. Kalau bot ini masuk grup lain, chat itu tidak akan menerima notif.</small></p>
 <div class="grid2">
 <div><label>Ulang notif saldo tiap (jam)</label><input id="sSaldoNotifJam" type="number" min="1" max="72" step="1" style="width:100%" placeholder="1"></div>
 <div></div>
@@ -784,6 +789,7 @@ async function loadSet(){
     $('sProfile').value=s.profile_dir||'';
     $('setNama').value=s.isipulsa_username||'';
     $('sBotAdmin').value=s.bot_admin_id||'';
+    $('sAdminThread').value=s.bot_admin_thread_id||'';
     $('sSaldoMin').value=s.saldo_min||'20000';
     $('sSaldoInt').value=s.saldo_interval_menit||'30';
     $('sSaldoNotifJam').value=s.saldo_notif_jam||'1';
@@ -833,6 +839,7 @@ async function simpanSet(){
     if($('sPaypanToken').value.trim())body.paypan_token=$('sPaypanToken').value.trim();
     if($('sBotToken').value.trim())body.bot_tg_token=$('sBotToken').value.trim();
     if($('sBotAdmin').value.trim())body.bot_admin_id=$('sBotAdmin').value.trim();
+    body.bot_admin_thread_id=$('sAdminThread').value.trim();
     if($('sSaldoMin').value)body.saldo_min=$('sSaldoMin').value.trim();
     if($('sSaldoInt').value)body.saldo_interval_menit=$('sSaldoInt').value.trim();
     if($('sSaldoNotifJam').value)body.saldo_notif_jam=$('sSaldoNotifJam').value.trim();

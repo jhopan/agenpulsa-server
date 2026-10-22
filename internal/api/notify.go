@@ -16,48 +16,81 @@ import (
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
 
-// TgNotify kirim pesan ke admin via Bot API. No-op kalau token/ID belum diset.
+// TgNotify kirim pesan lengkap (nomor, ref, modal, profit) ke chat admin.
+//
+// WHITELIST: bot_admin_id = daftar chat ID Telegram yang boleh menerima
+// notif lengkap (pisah koma). Hanya chat di daftar itu yang dikirimi —
+// kalau bot ini gak sengaja masuk grup lain, chat itu TIDAK akan menerima
+// notif (karena bukan di whitelist).
+//
 // Gagal = log saja, jangan bikin caller error (notif best effort).
 func (a *API) TgNotify(pesan string) {
 	token := a.store.GetSetting("bot_tg_token", "")
-	chatID := a.store.GetSetting("bot_admin_id", "")
-	if token == "" || chatID == "" {
+	if token == "" {
 		return // belum dikonfigurasi — diam
+	}
+	chats := a.adminChats()
+	if len(chats) == 0 {
+		return // whitelist kosong — diam
+	}
+	// Topik admin (opsional): kalau diisi, notif masuk topik tsb.
+	form := url.Values{
+		"text":       {pesan},
+		"parse_mode": {"Markdown"},
+	}
+	if th := strings.TrimSpace(a.store.GetSetting("bot_admin_thread_id", "")); th != "" {
+		form.Set("message_thread_id", th)
 	}
 	go func() {
 		defer func() { _ = recover() }()
 		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.PostForm(
-			"https://api.telegram.org/bot"+token+"/sendMessage",
-			url.Values{
-				"chat_id":    {chatID},
-				"text":       {pesan},
-				"parse_mode": {"Markdown"},
-			},
-		)
-		if err != nil {
-			log.Printf("[TG NOTIFY] gagal kirim: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-		var out struct {
-			OK          bool   `json:"ok"`
-			Description string `json:"description"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&out)
-		if !out.OK {
-			log.Printf("[TG NOTIFY] telegram tolak: %s", out.Description)
+		for _, chatID := range chats {
+			f := url.Values{}
+			for k, v := range form {
+				f[k] = v
+			}
+			f.Set("chat_id", chatID)
+			resp, err := client.PostForm(
+				"https://api.telegram.org/bot"+token+"/sendMessage", f)
+			if err != nil {
+				log.Printf("[TG NOTIFY] gagal kirim ke %s: %v", chatID, err)
+				continue
+			}
+			var out struct {
+				OK          bool   `json:"ok"`
+				Description string `json:"description"`
+			}
+			_ = json.NewDecoder(resp.Body).Decode(&out)
+			resp.Body.Close()
+			if !out.OK {
+				log.Printf("[TG NOTIFY] telegram tolak (%s): %s", chatID, out.Description)
+			}
 		}
 	}()
+}
+
+// adminChats: whitelist chat ID penerima notif lengkap (setting bot_admin_id).
+// Format: satu atau lebih ID dipisah koma. Nilai "-100..." = supergroup/channel.
+func (a *API) adminChats() []string {
+	raw := a.store.GetSetting("bot_admin_id", "")
+	var out []string
+	for _, v := range strings.Split(raw, ",") {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // TgNotifyBlock kirim dan tunggu hasil (dipakai tes koneksi di Pengaturan).
 func (a *API) TgNotifyBlock(pesan string) error {
 	token := a.store.GetSetting("bot_tg_token", "")
-	chatID := a.store.GetSetting("bot_admin_id", "")
-	if token == "" || chatID == "" {
-		return fmt.Errorf("bot_tg_token / bot_admin_id belum diset")
+	chats := a.adminChats()
+	if token == "" || len(chats) == 0 {
+		return fmt.Errorf("bot_tg_token / bot_admin_id (whitelist) belum diset")
 	}
+	chatID := chats[0]
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.PostForm(
 		"https://api.telegram.org/bot"+token+"/sendMessage",
@@ -185,3 +218,6 @@ func bersihkanNomor(s string) string {
 func FormatOrderNotifPublicForTest(o *db.Order, status, pesan string) string {
 	return formatOrderNotifPublic(o, status, pesan)
 }
+
+// AdminChatsForTest: export adminChats buat test.
+func (a *API) AdminChatsForTest() []string { return a.adminChats() }

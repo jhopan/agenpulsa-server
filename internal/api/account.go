@@ -126,7 +126,8 @@ var settingKeys = map[string]bool{
 	"isipulsa_username":    true,
 	"server_url":           true, // URL publik server, dipakai client & webhook
 	"bot_tg_token":         true, // token bot Telegram — server kirim notif via Bot API
-	"bot_admin_id":         true, // user ID Telegram penerima notif (mis. 123456789)
+	"bot_admin_id":         true, // WHITELIST chat ID penerima notif lengkap (pisah koma)
+	"bot_admin_thread_id":  true, // topik (message_thread_id) buat notif admin di supergroup
 	"saldo_min":            true, // ambang alert saldo isipulsa (default 20000)
 	"saldo_interval_menit": true, // jeda cek saldo (menit, default 30, 5-1440)
 	"saldo_notif_jam":      true, // ulang notif saldo tiap N jam (default 1)

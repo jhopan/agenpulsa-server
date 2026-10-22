@@ -673,3 +673,24 @@ func TestNotifPublicTanpaNomor(t *testing.T) {
 		t.Errorf("nomor bocor dari label:\n%s", msg2)
 	}
 }
+
+// TestNotifAdminWhitelist: notif lengkap hanya dikirim ke chat di whitelist.
+func TestNotifAdminWhitelist(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	a := api.New(store, mustEngine(t, store), testWebFS())
+	// kosong -> ga ada penerima
+	if len(a.AdminChatsForTest()) != 0 {
+		t.Error("whitelist kosong harus 0 penerima")
+	}
+	// isi 2 chat
+	_ = store.SetSetting("bot_admin_id", "111, -100222 ,333")
+	chats := a.AdminChatsForTest()
+	if len(chats) != 3 {
+		t.Fatalf("harus 3 penerima, dapat %d (%v)", len(chats), chats)
+	}
+	if chats[0] != "111" || chats[1] != "-100222" || chats[2] != "333" {
+		t.Errorf("whitelist salah: %v", chats)
+	}
+}
