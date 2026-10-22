@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -364,6 +365,9 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /health", a.health)
 	// Status antrian order untuk bot (cek via API): berapa order aktif lokasi ini.
 	mux.HandleFunc("GET /api/v1/order-status", a.auth(false, a.orderStatus))
+	// Push notif ke channel publik (topik testimoni) — buat bot LAIN (WA, script).
+	// Pesan otomatis disensor (nomor HP/ref dibuang) sebelum dikirim.
+	mux.HandleFunc("POST /api/v1/notify-public", a.auth(false, a.pushNotifPublic))
 
 	// Paypan webhook (HMAC, tanpa API key).
 	mux.HandleFunc("POST /webhook", a.paypanWebhook)
@@ -616,6 +620,8 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 	o.InvoiceID = inv.ID
 	o.ExpiresAt = inv.ExpiresAt // deadline bayar (unix) — expire lokal 5 menit
 	o.Status = "pending_payment"
+	// Kabari channel publik: ada transaksi baru masuk (tanpa nomor).
+	defer a.notifyPublicMasuk(o)
 	if err := a.eng.Enqueue(o); err != nil { // simpan row (status pending, worker skip)
 		jsonErr(w, 500, err.Error())
 		return
@@ -820,7 +826,8 @@ func (a *API) WatchdogTickForTest() { a.watchdogTick() }
 func (a *API) notifPublicStatus(status string) bool {
 	raw := strings.TrimSpace(a.store.GetSetting("notif_public_status", ""))
 	if raw == "" {
-		return status == "success"
+		// default: transaksi masuk + sukses
+		return status == "success" || status == "masuk"
 	}
 	for _, v := range strings.Split(raw, ",") {
 		if strings.TrimSpace(strings.ToLower(v)) == status {
@@ -828,4 +835,26 @@ func (a *API) notifPublicStatus(status string) bool {
 		}
 	}
 	return false
+}
+
+// pushNotifPublic: bot lain push notif ke channel publik (topik testimoni).
+// Body: {"pesan": "..."} — pesan disensor sebelum dikirim.
+func (a *API) pushNotifPublic(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Pesan string `json:"pesan"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req); err != nil {
+		jsonErr(w, 400, "json tidak valid")
+		return
+	}
+	req.Pesan = strings.TrimSpace(req.Pesan)
+	if req.Pesan == "" {
+		jsonErr(w, 400, "pesan wajib")
+		return
+	}
+	if !a.TgNotifyPublicCustom(req.Pesan) {
+		jsonErr(w, 502, "gagal kirim ke channel publik (channel belum diset atau ditolak telegram)")
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }

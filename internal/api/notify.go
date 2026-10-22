@@ -183,6 +183,7 @@ func (a *API) TgNotifyPublic(pesan string) {
 func formatOrderNotifPublic(o *db.Order, status, pesan string) string {
 	emoji := map[string]string{
 		"success": "✅", "failed": "❌", "cancelled": "🚫", "scheduled": "📅",
+		"masuk": "🧾",
 	}[status]
 	// label dibersihin: kalau label ikut nyimpen nomor (mis. "LANGGANAN
 	// 0878... (ref)"), replace dengan "[paket]" supaya ga bocor.
@@ -221,3 +222,57 @@ func FormatOrderNotifPublicForTest(o *db.Order, status, pesan string) string {
 
 // AdminChatsForTest: export adminChats buat test.
 func (a *API) AdminChatsForTest() []string { return a.adminChats() }
+
+
+// TgNotifyPublicCustom: kirim pesan ke channel publik dari bot MANA pun.
+// Dipakai endpoint /api/v1/notify-public — bot lain (WA, script, dashboard)
+// bisa push notif transaksi ke topik testimoni tanpa lewat agenpulsa-server.
+//
+// Pengaman: pesan disensor (nomor HP / ref dibuang) sebelum dikirim, dan
+// panjangnya dibatasi. Jadi bot pengirim gak bisa bocorin data pelanggan
+// ke channel publik.
+func (a *API) TgNotifyPublicCustom(pesan string) bool {
+	token := strings.TrimSpace(a.store.GetSetting("bot_public_token", ""))
+	chatID := strings.TrimSpace(a.store.GetSetting("bot_public_chat_id", ""))
+	if token == "" || chatID == "" {
+		return false
+	}
+	pesan = bersihkanNomor(pesan)
+	if len(pesan) > 900 {
+		pesan = pesan[:900] + "…"
+	}
+	form := url.Values{
+		"chat_id":    {chatID},
+		"text":       {pesan},
+		"parse_mode": {"Markdown"},
+	}
+	if th := strings.TrimSpace(a.store.GetSetting("bot_public_thread_id", "")); th != "" {
+		form.Set("message_thread_id", th)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.PostForm("https://api.telegram.org/bot"+token+"/sendMessage", form)
+	if err != nil {
+		log.Printf("[TG PUBLIC] gagal push custom: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+	var out struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if !out.OK {
+		log.Printf("[TG PUBLIC] telegram tolak: %s", out.Description)
+		return false
+	}
+	return true
+}
+
+// notifyPublicMasuk: order baru masuk (invoice dibuat) -> kabari channel
+// publik bahwa ada transaksi masuk. Tanpa nomor.
+func (a *API) notifyPublicMasuk(o *db.Order) {
+	if !a.notifPublicStatus("masuk") {
+		return
+	}
+	a.TgNotifyPublic(formatOrderNotifPublic(o, "masuk", ""))
+}

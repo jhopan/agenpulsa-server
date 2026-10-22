@@ -302,10 +302,10 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div><label>Chat / channel tujuan</label><input id="sPubChat" style="width:100%" placeholder="-1001234567890 (channel) atau chat id"></div>
 </div>
 <div class="grid2">
-<div><label>Status yang dikirim (pisah koma)</label><input id="sPubStatus" style="width:100%" placeholder="success"></div>
-<div><label>Topik di supergroup (opsional)</label><input id="sPubThread" style="width:100%" placeholder="message_thread_id, mis. 12"></div>
+<div><label>Status yang dikirim (pisah koma)</label><input id="sPubStatus" style="width:100%" placeholder="masuk,success"></div>
+<div><label>Topik Testimoni di supergroup (opsional)</label><input id="sPubThread" style="width:100%" placeholder="message_thread_id, mis. 12"></div>
 </div>
-<p><small>Supergroup mode forum? Isi <b>Topik</b> dengan <code>message_thread_id</code> supaya notif masuk topik tertentu, bukan general. Cari nilainya: kirim pesan di topik itu, lalu buka <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> → cari <code>"message_thread_id"</code>.</small></p>
+<p><small>Supergroup mode forum? Isi <b>Topik Testimoni</b> dengan <code>message_thread_id</code> supaya notif masuk topik tertentu, bukan general. Cari nilainya: kirim pesan di topik itu, lalu buka <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> → cari <code>"message_thread_id"</code>.<br><br>Bot lain juga bisa kirim ke topik ini: <code>POST /api/v1/notify-public</code> dengan <code>{"pesan":"..."}</code> (nomor HP otomatis dibuang).</small></p>
 </div>
 <div class="card">
 <h2>Backup Google Sheet</h2>
