@@ -129,9 +129,9 @@ Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan 
   `bot_admin_id` (bisa banyak, pisah koma). Kalau bot admin kena add ke grup lain,
   chat itu TIDAK menerima notif karena bukan whitelist.
 
-- Channel publik = bot token TERPISAH (bot testimoni). Status default
-  `masuk,success` — "masuk" = transaksi baru dibuat (invoice), "success" = beli
-  beres. Ganti via `notif_public_status` (pisah koma).
+- Channel publik = bot token TERPISAH (bot testimoni). Default: **hanya
+  transaksi selesai (success)** — bukan saat order masuk. Ganti via
+  `notif_public_status` (pisah koma, mis. `success,failed`).
 - **Supergrup = channel publik** (topik "Testimoni"). **Admin = chat pribadi**
   (`bot_admin_id` whitelist) — TIDAK kirim ke grup.
 - Bot LAIN bisa push ke topik testimoni: `POST /api/v1/notify-public`

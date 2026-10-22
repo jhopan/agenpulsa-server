@@ -695,25 +695,3 @@ func TestNotifAdminWhitelist(t *testing.T) {
 	}
 }
 
-// TestNotifPublicMasuk: status "masuk" (transaksi baru) juga bisa ke channel publik.
-func TestNotifPublicMasuk(t *testing.T) {
-	srv, store, _ := newTestServer(t)
-	defer srv.Close()
-	_ = api.New(store, mustEngine(t, store), testWebFS())
-
-	o := &db.Order{
-		Ref: "pend-x1", Nomor: "081234567890", Label: "Kuota Game 1GB, 30 Hari",
-		Status: "pending_payment", HargaJual: 6500,
-		CreatedAt: "2026-10-22 12:00:00",
-	}
-	msg := api.FormatOrderNotifPublicForTest(o, "masuk", "")
-	if !strings.Contains(msg, "MASUK") {
-		t.Errorf("pesan harus menandai MASUK:\n%s", msg)
-	}
-	if strings.Contains(msg, "081234567890") {
-		t.Errorf("nomor bocor:\n%s", msg)
-	}
-	if !strings.Contains(msg, "Kuota Game") {
-		t.Errorf("nama paket harus ada:\n%s", msg)
-	}
-}

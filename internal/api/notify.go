@@ -183,7 +183,6 @@ func (a *API) TgNotifyPublic(pesan string) {
 func formatOrderNotifPublic(o *db.Order, status, pesan string) string {
 	emoji := map[string]string{
 		"success": "✅", "failed": "❌", "cancelled": "🚫", "scheduled": "📅",
-		"masuk": "🧾",
 	}[status]
 	// label dibersihin: kalau label ikut nyimpen nomor (mis. "LANGGANAN
 	// 0878... (ref)"), replace dengan "[paket]" supaya ga bocor.
@@ -266,13 +265,4 @@ func (a *API) TgNotifyPublicCustom(pesan string) bool {
 		return false
 	}
 	return true
-}
-
-// notifyPublicMasuk: order baru masuk (invoice dibuat) -> kabari channel
-// publik bahwa ada transaksi masuk. Tanpa nomor.
-func (a *API) notifyPublicMasuk(o *db.Order) {
-	if !a.notifPublicStatus("masuk") {
-		return
-	}
-	a.TgNotifyPublic(formatOrderNotifPublic(o, "masuk", ""))
 }

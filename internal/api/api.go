@@ -620,8 +620,6 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 	o.InvoiceID = inv.ID
 	o.ExpiresAt = inv.ExpiresAt // deadline bayar (unix) — expire lokal 5 menit
 	o.Status = "pending_payment"
-	// Kabari channel publik: ada transaksi baru masuk (tanpa nomor).
-	defer a.notifyPublicMasuk(o)
 	if err := a.eng.Enqueue(o); err != nil { // simpan row (status pending, worker skip)
 		jsonErr(w, 500, err.Error())
 		return
@@ -826,8 +824,8 @@ func (a *API) WatchdogTickForTest() { a.watchdogTick() }
 func (a *API) notifPublicStatus(status string) bool {
 	raw := strings.TrimSpace(a.store.GetSetting("notif_public_status", ""))
 	if raw == "" {
-		// default: transaksi masuk + sukses
-		return status == "success" || status == "masuk"
+		// default: hanya transaksi selesai (sukses)
+		return status == "success"
 	}
 	for _, v := range strings.Split(raw, ",") {
 		if strings.TrimSpace(strings.ToLower(v)) == status {
