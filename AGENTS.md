@@ -180,7 +180,8 @@ Lingkup TERLARANG (lapor saja, jangan edit):
 
 - Server core: SKELETON JALAN (order engine rod, queue, scheduler, API, web admin, webhook paypan).
 - Bot Telegram lama (`../AgenPulsa/`): TIDAK diubah, masih dipakai produksi. Nanti tgbot.py jadi client API ini.
-- Belum ada: login VNC flow, inject cookies, order batch, retry callback, admin form UI (sekarang read-only). Paypan connector di sisi paypan belum dibuat.
+- Login isipulsa = inject cookies (export Cookie-Editor) — login interaktif/VNC DIHAPUS.
+- Belum ada: order batch, retry callback, admin form UI (sekarang read-only). Paypan connector di sisi paypan belum dibuat.
 
 ## Layout
 

@@ -53,6 +53,8 @@ func Open(path string) (*Store, error) {
 	// expires_at: deadline bayar invoice (unix) — biar order pending bisa
 	// di-expire lokal 5 menit tanpa nunggu Paypan.
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0")
+	// client_ip: lokasi client untuk limit order aktif (3 per lokasi).
+	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN client_ip TEXT")
 	return &Store{DB: d, path: path}, nil
 }
 

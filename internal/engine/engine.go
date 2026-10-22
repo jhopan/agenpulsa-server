@@ -60,8 +60,6 @@ type Engine struct {
 	mu        sync.Mutex // queue: satu eksekusi browser pada satu waktu
 	wake      chan struct{}
 	closed    bool
-	loginOpen bool          // sesi login (window/VNC) sedang berjalan
-	sess      *LoginSession // sesi login aktif, nil kalau tidak ada
 	// Notifier dipanggil tiap order status final (success/failed/cancelled) —
 	// di-set oleh api (TgNotify). Nil = silent.
 	Notifier func(order db.Order, status, pesan string)
@@ -194,11 +192,6 @@ func (e *Engine) Worker() {
 	for {
 		if e.closed {
 			return
-		}
-		// sesi login aktif -> browser/profile dipakai login, jangan rebutan.
-		if e.LoginOpen() {
-			time.Sleep(2 * time.Second)
-			continue
 		}
 		o, err := e.store.PopNextQueued()
 		if err != nil {

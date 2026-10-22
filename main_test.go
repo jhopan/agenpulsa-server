@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -531,5 +532,107 @@ func TestWatchdogOrderNyangkut(t *testing.T) {
 	g2, _ := store.GetOrderByRef("stuck-2")
 	if g2.Status != "running" {
 		t.Errorf("order baru harus tetap running, dapat %q", g2.Status)
+	}
+}
+
+// TestLimitOrderAktifPerLokasi: lokasi dengan 3 order aktif -> order ke-4
+// ditolak (429). Lokasi lain tetap boleh.
+func TestLimitOrderAktifPerLokasi(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	it := db.CatalogItem{Label: "T", Tab: "Paket Kuota", Voucher: "1", HargaMax: 1000, HargaJual: 2000, Aktif: true}
+	if _, err := store.UpsertCatalog(&it); err != nil {
+		t.Fatal(err)
+	}
+	login := loginAdmin(t, srv)
+
+	// 3 order aktif dari IP yang sama
+	for i := 0; i < 3; i++ {
+		o := &db.Order{
+			Ref: "ip-lim-" + strconv.Itoa(i), Nomor: "081234567890", Label: "T",
+			Status: "pending_payment", Sumber: "api", ClientIP: "1.2.3.4",
+		}
+		if _, err := store.CreateOrder(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := store.CountActiveByIP("1.2.3.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Errorf("harus ada 3 order aktif, dapat %d", n)
+	}
+	// lokasi lain = 0
+	n2, _ := store.CountActiveByIP("5.6.7.8")
+	if n2 != 0 {
+		t.Errorf("lokasi lain harus 0, dapat %d", n2)
+	}
+	// order ke-4 dari IP yang sama -> 429
+	body := `{"catalog_id":1,"nomor":"081234567890"}`
+	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/orders/pending", strings.NewReader(body))
+	req.AddCookie(login)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 429 {
+		t.Errorf("order ke-4 harus 429 (limit 3 per lokasi), got %d", res.StatusCode)
+	}
+	// lokasi lain -> bukan 429
+	req2, _ := http.NewRequest("POST", srv.URL+"/api/v1/orders/pending", strings.NewReader(body))
+	req2.AddCookie(login)
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("X-Forwarded-For", "5.6.7.8")
+	res2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.StatusCode == 429 {
+		t.Error("lokasi lain harusnya boleh order")
+	}
+}
+
+// TestOrderStatusEndpoint: bot bisa cek antrian via API.
+func TestOrderStatusEndpoint(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+	login := loginAdmin(t, srv)
+
+	o := &db.Order{
+		Ref: "st-1", Nomor: "081234567890", Label: "T",
+		Status: "pending_payment", Sumber: "api", ClientIP: "9.9.9.9", HargaJual: 6500,
+	}
+	if _, err := store.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/order-status", nil)
+	req.AddCookie(login)
+	req.Header.Set("X-Forwarded-For", "9.9.9.9")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("order-status harus 200, got %d", res.StatusCode)
+	}
+	var out struct {
+		Aktif      int  `json:"aktif"`
+		Maks       int  `json:"maks"`
+		BisaOrder  bool `json:"bisa_order"`
+		OrderCount int  `json:"-"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&out)
+	if out.Aktif != 1 {
+		t.Errorf("aktif harus 1, dapat %d", out.Aktif)
+	}
+	if out.Maks != 3 {
+		t.Errorf("maks harus 3, dapat %d", out.Maks)
+	}
+	if !out.BisaOrder {
+		t.Error("bisa_order harus true (aktif < maks)")
 	}
 }

@@ -134,6 +134,7 @@ type Order struct {
 	InvoiceID   string `json:"invoice_id"`
 	ExpiresAt   int64  `json:"expires_at"` // unix deadline bayar invoice
 	Sumber      string `json:"sumber"`
+	ClientIP    string `json:"client_ip"` // lokasi client (limit order aktif)
 	ChatID      string `json:"chat_id"`
 	CallbackURL string `json:"callback_url"`
 	CreatedAt   string `json:"created_at"`
@@ -150,12 +151,12 @@ func (o *Order) DeadlineUnix() int64 {
 	return created.Add(5 * time.Minute).Unix()
 }
 
-const orderCols = "id,COALESCE(ref,''),COALESCE(nomor,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),COALESCE(expires_at,0),sumber,COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
+const orderCols = "id,COALESCE(ref,''),COALESCE(nomor,''),COALESCE(catalog_id,0),label,modal,harga_jual,status,COALESCE(order_id_isipulsa,''),COALESCE(pesan,''),COALESCE(invoice_id,''),COALESCE(expires_at,0),sumber,COALESCE(client_ip,''),COALESCE(chat_id,''),COALESCE(callback_url,''),created_at,updated_at"
 
 func scanOrder(sc interface{ Scan(...any) error }) (*Order, error) {
 	var o Order
 	err := sc.Scan(&o.ID, &o.Ref, &o.Nomor, &o.CatalogID, &o.Label, &o.Modal, &o.HargaJual, &o.Status,
-		&o.OrderIDIsip, &o.Pesan, &o.InvoiceID, &o.ExpiresAt, &o.Sumber, &o.ChatID, &o.CallbackURL, &o.CreatedAt, &o.UpdatedAt)
+		&o.OrderIDIsip, &o.Pesan, &o.InvoiceID, &o.ExpiresAt, &o.Sumber, &o.ClientIP, &o.ChatID, &o.CallbackURL, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -171,9 +172,9 @@ func (s *Store) CreateOrder(o *Order) (int64, error) {
 	if o.CatalogID > 0 {
 		catalogID = o.CatalogID
 	}
-	r, err := s.DB.Exec(`INSERT INTO orders(ref,nomor,catalog_id,label,modal,harga_jual,status,order_id_isipulsa,pesan,invoice_id,expires_at,sumber,chat_id,callback_url,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		o.Ref, o.Nomor, catalogID, o.Label, o.Modal, o.HargaJual, o.Status, o.OrderIDIsip, o.Pesan, o.InvoiceID, o.ExpiresAt, o.Sumber, o.ChatID, o.CallbackURL, o.CreatedAt, o.UpdatedAt)
+	r, err := s.DB.Exec(`INSERT INTO orders(ref,nomor,catalog_id,label,modal,harga_jual,status,order_id_isipulsa,pesan,invoice_id,expires_at,sumber,client_ip,chat_id,callback_url,created_at,updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		o.Ref, o.Nomor, catalogID, o.Label, o.Modal, o.HargaJual, o.Status, o.OrderIDIsip, o.Pesan, o.InvoiceID, o.ExpiresAt, o.Sumber, o.ClientIP, o.ChatID, o.CallbackURL, o.CreatedAt, o.UpdatedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -311,6 +312,39 @@ func (s *Store) ListOrdersSince(since string, limit int) ([]*Order, error) {
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+// StuckQueued: order 'queued' yang sudah lama nunggu worker (mis. worker
+// tertahan, mis. proses isipulsa lambat). Kalau kelamaan -> failed + notif,
+// biar gak nyangkut diam-diam.
+func (s *Store) StuckQueued(olderThan time.Duration) ([]*Order, error) {
+	cutoff := NowWIB().Add(-olderThan).Format("2006-01-02 15:04:05")
+	rows, err := s.DB.Query("SELECT "+orderCols+" FROM orders WHERE status='queued' AND updated_at<?", cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*Order
+	for rows.Next() {
+		o, err := scanOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// CountActiveByIP: jumlah order yang masih aktif (pending_payment / queued /
+// running) dari satu lokasi. Dipakai limit: max 3 order aktif per lokasi.
+func (s *Store) CountActiveByIP(ip string) (int, error) {
+	if ip == "" {
+		return 0, nil
+	}
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM orders
+		WHERE COALESCE(client_ip,'')=? AND status IN ('pending_payment','queued','running')`, ip).Scan(&n)
+	return n, err
 }
 
 // ---------- Laporan ----------

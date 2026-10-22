@@ -317,13 +317,13 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/catalog", a.auth(true, a.upsertCatalog))
 	mux.HandleFunc("DELETE /api/v1/catalog/{id}", a.auth(true, a.deleteCatalog))
 
-	mux.HandleFunc("POST /api/v1/orders", a.auth(false, a.rateLimitOrder(a.createOrder)))
+	mux.HandleFunc("POST /api/v1/orders", a.auth(false, a.limitActiveOrder(a.createOrder)))
 	mux.HandleFunc("GET /api/v1/orders/{id}", a.auth(false, a.getOrder))
 	mux.HandleFunc("GET /api/v1/orders", a.auth(false, a.listOrders))
 	mux.HandleFunc("DELETE /api/v1/orders", a.auth(true, a.hapusHistory))
-	mux.HandleFunc("POST /api/v1/orders/pending", a.auth(false, a.rateLimitOrder(a.createPending))) // flow paypan
+	mux.HandleFunc("POST /api/v1/orders/pending", a.auth(false, a.limitActiveOrder(a.createPending))) // flow paypan
 	// Langganan (jadwal sekali) juga dibatasi.
-	mux.HandleFunc("POST /api/v1/langganan", a.rateLimitOrder(a.langgananBaru))
+	mux.HandleFunc("POST /api/v1/langganan", a.limitActiveOrder(a.langgananBaru))
 
 	mux.HandleFunc("GET /api/v1/status", a.auth(false, a.status))
 	mux.HandleFunc("GET /api/v1/report", a.auth(false, a.report))
@@ -334,9 +334,7 @@ func (a *API) Routes() http.Handler {
 	// Akun isipulsa + pengaturan (admin via session/API key, gate di handler).
 	mux.HandleFunc("GET /api/v1/account", a.auth(false, a.account))
 	mux.HandleFunc("POST /api/v1/account/relogin", a.auth(true, a.gantiAkun))
-	mux.HandleFunc("POST /api/v1/account/login-manual", a.auth(true, a.loginManual))
 	mux.HandleFunc("POST /api/v1/account/cookies", a.auth(true, a.importCookies))
-	mux.HandleFunc("GET /api/v1/account/vnc", a.auth(true, a.loginVNC))
 	mux.HandleFunc("POST /api/v1/account/username", a.auth(true, a.simpanUsername))
 	mux.HandleFunc("GET /api/v1/settings", a.auth(true, a.getSettings))
 	mux.HandleFunc("POST /api/v1/settings", a.auth(true, a.setSettings))
@@ -359,6 +357,8 @@ func (a *API) Routes() http.Handler {
 
 	// Health check publik (auto-ping / monitoring) — tanpa API key.
 	mux.HandleFunc("GET /health", a.health)
+	// Status antrian order untuk bot (cek via API): berapa order aktif lokasi ini.
+	mux.HandleFunc("GET /api/v1/order-status", a.auth(false, a.orderStatus))
 
 	// Paypan webhook (HMAC, tanpa API key).
 	mux.HandleFunc("POST /webhook", a.paypanWebhook)
@@ -497,7 +497,7 @@ type orderReq struct {
 	CallbackURL string `json:"callback_url"`
 }
 
-func (a *API) buildOrder(req *orderReq, defaultSumber string) (*db.Order, error) {
+func (a *API) buildOrder(req *orderReq, defaultSumber string, clientIP string) (*db.Order, error) {
 	nomor := NormalizeNomor(req.Nomor)
 	if nomor == "" {
 		return nil, fmt.Errorf("nomor tidak valid (butuh format 08xxx / 62xxx)")
@@ -508,6 +508,7 @@ func (a *API) buildOrder(req *orderReq, defaultSumber string) (*db.Order, error)
 		CatalogID:   req.CatalogID,
 		Status:      "queued",
 		Sumber:      defaultSumber,
+		ClientIP:    clientIP,
 		ChatID:      req.ChatID,
 		CallbackURL: req.CallbackURL,
 	}
@@ -557,7 +558,7 @@ func (a *API) createOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	o, err := a.buildOrder(req, "api")
+	o, err := a.buildOrder(req, "api", a.clientIP(r))
 	if err != nil {
 		jsonErr(w, 400, err.Error())
 		return
@@ -587,7 +588,7 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, exist)
 		return
 	}
-	o, err := a.buildOrder(req, "paypan")
+	o, err := a.buildOrder(req, "paypan", a.clientIP(r))
 	if err != nil {
 		jsonErr(w, 400, err.Error())
 		return
@@ -749,6 +750,10 @@ var _ = time.Now
 // (server crash / restart di tengah jalan). Umur normal order < 2 menit.
 const runningMaxUmur = 10 * time.Minute
 
+// queuedMaxUmur: order yang nunggu worker lebih lama dari ini dianggap
+// nyangkut (worker tertahan, mis. proses isipulsa lambat).
+const queuedMaxUmur = 15 * time.Minute
+
 // StartWatchdog: cek tiap menit order yang nyangkut di status 'running'.
 // TIDAK di-retry (user: expire/nyangkut cukup notifikasi, bukan retry) —
 // order di-fail + notifikasi admin biar tau dan bisa beli manual.
@@ -762,19 +767,36 @@ func (a *API) StartWatchdog() {
 }
 
 func (a *API) watchdogTick() {
+	// a) order yang sedang diproses tapi lama (server crash)
 	stuck, err := a.store.StuckRunning(runningMaxUmur)
-	if err != nil || len(stuck) == 0 {
+	if err == nil {
+		for _, o := range stuck {
+			a.failStuckOrder(o, "order nyangkut (server restart saat proses)")
+		}
+	}
+	// b) order yang nunggu worker kelamaan (mis. worker tertahan krn admin
+	//    buka login manual) — juga nyangkut, harus sejenis.
+	queued, err := a.store.StuckQueued(queuedMaxUmur)
+	if err != nil {
 		return
 	}
-	for _, o := range stuck {
+	for _, o := range queued {
+		a.failStuckOrder(o, "order nunggu worker kelamaan (admin buka login manual?)")
+	}
+}
+
+// failStuckOrder: order nyangkut -> failed + notif admin (TANPA retry).
+func (a *API) failStuckOrder(o *db.Order, alasan string) {
+	{
 		_ = a.store.UpdateOrderStatus(o.ID, "failed",
-			"order nyangkut (server restart saat proses) — tidak diproses otomatis, cek manual", "")
-		log.Printf("[WATCHDOG] order #%d (ref %s) nyangkut > %s -> failed + notif", o.ID, o.Ref, runningMaxUmur)
-		a.TgNotify("🚨 *Order Nyangkut* (server restart saat proses)\n\n" +
+			alasan+" — tidak diproses otomatis, cek manual", "")
+		log.Printf("[WATCHDOG] order #%d (ref %s) nyangkut: %s -> failed + notif", o.ID, o.Ref, alasan)
+		a.TgNotify("🚨 *Order Nyangkut*\n\n" +
 			"🔖 Ref: `" + o.Ref + "`\n" +
 			"📱 Nomor: " + o.Nomor + "\n" +
 			"📦 " + o.Label + "\n" +
 			"💵 Harga: Rp " + strconv.FormatInt(o.HargaJual, 10) + "\n" +
+			"⚠️ " + alasan + "\n" +
 			"\nOrder TIDAK diproses ulang otomatis (biar aman).\n" +
 			"Cek: kalau user sudah bayar → beli manual ke nomor tsb, atau refund.")
 	}

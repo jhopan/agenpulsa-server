@@ -51,7 +51,6 @@ func (a *API) account(w http.ResponseWriter, r *http.Request) {
 		Saldo:          "-",
 		Profile:        a.eng.ProfileDir(),
 		Username:       a.store.GetSetting("isipulsa_username", "-"),
-		WinOpen:        a.eng.LoginOpen(),
 		CookieUmurJam:  umur,
 		CookieReminder: umur >= cookieReminderJam,
 	}
@@ -82,39 +81,7 @@ func (a *API) gantiAkun(w http.ResponseWriter, r *http.Request) {
 }
 
 // loginManual: mulai sesi login — window Chrome langsung (Windows) atau
-// Xvfb+VNC (Linux headless), deteksi login sukses + auto-close.
-func (a *API) loginManual(w http.ResponseWriter, r *http.Request) {
-	if err := a.eng.StartLogin(); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	mode := "window"
-	if a.eng.VNCActive() {
-		mode = "vnc"
-	}
-	writeJSON(w, 200, map[string]any{
-		"ok":    true,
-		"mode":  mode,
-		"pesan": "Sesi login dimulai — login di window/remote itu. Tutup otomatis setelah login berhasil.",
-	})
-}
 
-// loginVNC: status sesi login — URL noVNC + password untuk dibuka di browser.
-func (a *API) loginVNC(w http.ResponseWriter, r *http.Request) {
-	url, pass, ok := a.eng.VNCInfo()
-	if !ok {
-		writeJSON(w, 200, map[string]any{"aktif": false})
-		return
-	}
-	writeJSON(w, 200, map[string]any{
-		"aktif":    true,
-		"url":      url,
-		"password": pass,
-		"pesan":    "Buka URL di browser (satu jaringan), masukkan password VNC, login isipulsa di dalam remote.",
-	})
-}
-
-// importCookies: inject cookies export Cookie-Editor (JSON) ke profile.
 func (a *API) importCookies(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Cookies string `json:"cookies"`

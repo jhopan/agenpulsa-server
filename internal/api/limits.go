@@ -71,20 +71,83 @@ func (rl *rateLimiter) sweep() {
 	}
 }
 
-// rateLimitOrder: middleware untuk endpoint pembuatan order.
-// Batas: 10 order per 5 menit per kunci (API key kalau ada, else IP).
-func (a *API) rateLimitOrder(next http.HandlerFunc) http.HandlerFunc {
+// maxActiveOrderPerIP: maksimal order AKTIF (pending_payment/queued/running)
+// per lokasi. Kalau sudah penuh -> order baru DITOLAK dan user diminta nunggu
+// salah satu order yang sedang jalan selesai. Ini yang bikin bot tinggal
+// "hit API buat cek" tanpa bikin antrian numpuk.
+const maxActiveOrderPerIP = 3
+
+// limitActiveOrder: middleware sebelum buat order. Kalau lokasi sudah punya
+// maxActiveOrderPerIP order aktif -> 429 (dengan sisa/status biar bot tahu).
+func (a *API) limitActiveOrder(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		key := a.rateKey(r)
-		ok, sisa := a.orderLimiter.allow(key)
-		if !ok {
-			w.Header().Set("Retry-After", "60")
-			jsonErr(w, 429, "terlalu banyak permintaan order — tunggu 1 menit lalu ulangi")
+		ip := a.clientIP(r)
+		n, err := a.store.CountActiveByIP(ip)
+		if err != nil {
+			next(w, r) // DB error -> jangan blokir order
 			return
 		}
-		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(sisa))
+		if n >= maxActiveOrderPerIP {
+			w.Header().Set("Retry-After", "60")
+			w.Header().Set("X-Active-Orders", strconv.Itoa(n))
+			jsonErr(w, 429, "lokasi kamu masih punya "+strconv.Itoa(n)+" order aktif (maks "+strconv.Itoa(maxActiveOrderPerIP)+") — tunggu salah satu selesai, lalu ulangi")
+			return
+		}
+		w.Header().Set("X-Active-Orders", strconv.Itoa(n))
 		next(w, r)
 	}
+}
+
+// clientIP: IP client. Kalau lewat proxy (CF tunnel) pakai X-Forwarded-For.
+func (a *API) clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return strings.TrimSpace(strings.Split(fwd, ",")[0])
+	}
+	if r.Header.Get("CF-Connecting-IP") != "" {
+		return strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))
+	}
+	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+	return ip
+}
+
+// orderStatus: status antrian untuk bot (cek via API). Menjawab: berapa order
+// aktif dari lokasi ini, dan daftar statusnya.
+func (a *API) orderStatus(w http.ResponseWriter, r *http.Request) {
+	ip := a.clientIP(r)
+	n, err := a.store.CountActiveByIP(ip)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	pending, err := a.store.ListOrders("pending_payment", 20)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	// filter hanya order milik lokasi ini
+	var mine []*db.Order
+	for _, o := range pending {
+		if o.ClientIP == ip {
+			mine = append(mine, o)
+		}
+	}
+	out := make([]map[string]any, 0, len(mine))
+	for _, o := range mine {
+		out = append(out, map[string]any{
+			"ref": o.Ref, "status": o.Status, "nomor": o.Nomor,
+			"label": o.Label, "total": o.HargaJual, "created_at": o.CreatedAt,
+		})
+	}
+	writeJSON(w, 200, map[string]any{
+		"ip":            ip,
+		"aktif":         n,
+		"maks":          maxActiveOrderPerIP,
+		"bisa_order":    n < maxActiveOrderPerIP,
+		"order_pending": out,
+	})
 }
 
 // rateKey: API key kalau ada, else IPRemote (proxy: pakai X-Forwarded-For).
