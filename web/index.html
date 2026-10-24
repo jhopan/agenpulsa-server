@@ -303,7 +303,7 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 </div>
 <div class="grid2">
 <div><label>Status yang dikirim (pisah koma)</label><input id="sPubStatus" style="width:100%" placeholder="success"></div>
-<div><label>Topik Testimoni di supergroup (opsional)</label><input id="sPubThread" style="width:100%" placeholder="message_thread_id, mis. 12"></div>
+<div><label>Topik Testimoni di supergroup (opsional)</label><div style="display:flex;gap:6px"><input id="sPubThread" style="width:100%" placeholder="message_thread_id, mis. 12"><button class="sec" style="width:auto;white-space:nowrap;padding:8px 10px" type="button" onclick="bukaDialog('topicGuide')">Panduan</button></div></div>
 </div>
 <p><small>Supergroup mode forum? Isi <b>Topik Testimoni</b> dengan <code>message_thread_id</code> supaya notif masuk topik tertentu, bukan general. Cari nilainya: kirim pesan di topik itu, lalu buka <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> → cari <code>"message_thread_id"</code>.<br><br>Bot lain juga bisa kirim ke topik ini: <code>POST /api/v1/notify-public</code> dengan <code>{"pesan":"..."}</code> (nomor HP otomatis dibuang).</small></p>
 </div>
@@ -327,7 +327,7 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div><label>Interval cek saldo (menit, 5-1440)</label><input id="sSaldoInt" type="number" min="5" max="1440" step="5" style="width:100%" placeholder="30"></div>
 </div>
 <div class="grid2">
-<div><label>Topik notif admin di supergroup (opsional)</label><input id="sAdminThread" style="width:100%" placeholder="message_thread_id, mis. 15"></div>
+<div><label>Topik notif admin (opsional)</label><div style="display:flex;gap:6px"><input id="sAdminThread" style="width:100%" placeholder="message_thread_id, mis. 15"><button class="sec" style="width:auto;white-space:nowrap;padding:8px 10px" type="button" onclick="bukaDialog('topicGuide')">Panduan</button></div></div>
 <div></div>
 </div>
 <p><small>Notif <b>lengkap</b> (nomor, ref, modal, profit) hanya dikirim ke chat ID di whitelist di atas. Kalau bot ini masuk grup lain, chat itu tidak akan menerima notif.</small></p>
@@ -395,6 +395,22 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <li><strong>Simpan pengaturan</strong>Paste ID ke kolom ID Telegram admin, lalu tekan Simpan Pengaturan.</li>
 <li><strong>Aktifkan dan tes</strong>Kirim `/start` ke bot yang dibuat, kemudian tekan Tes Notif.</li>
 </ol></div>
+</dialog>
+<dialog id="topicGuide" aria-labelledby="topicGuideTitle">
+<div class="dialog-head"><h2 id="topicGuideTitle">Kirim ke Topik Supergrup</h2><button class="dialog-close" type="button" onclick="tutupDialog('topicGuide')" aria-label="Tutup panduan">×</button></div>
+<div class="dialog-body">
+<ol>
+<li><strong>Jadikan grup Supergrup</strong>Buka grup → Settings → ubah jadi <em>Supergroup</em>. Setelah itu aktifkan <em>Topics</em> (mode forum).</li>
+<li><strong>Buat topik</strong>Buat topik baru, misal "Testimoni". Semua pesan transaksi akan masuk ke topik ini.</li>
+<li><strong>Tambahkan bot ke grup</strong>Add bot testimoni ke supergrup, lalu jadikan <b>Admin</b> (minimal izin kirim pesan). Tanpa admin, bot tidak bisa posting.</li>
+<li><strong>Ambil chat ID</strong>Kirim satu pesan di topik Testimoni (misal "tes"). Lalu buka:<br><code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code><br>Cari <code>"chat":{"id":-100xxxxxxxxxx}</code> → itu chat ID supergrup. Isi ke kolom <b>Chat / channel tujuan</b>.</li>
+<li><strong>Ambil message_thread_id</strong>Di respons getUpdates yang sama, cari <code>"message_thread_id":12</code> (angka topik). Isi ke kolom <b>Topik Testimoni</b>.</li>
+<li><strong>Simpan &amp; tes</strong>Tekan Simpan Pengaturan, lalu buat satu transaksi uji. Notif harus muncul di topik Testimoni, bukan di General.</li>
+</ol>
+<p><small><b>Kalau notif muncul di General:</b> berarti <code>message_thread_id</code> kosong/salah. Ambil ulang dari getUpdates setelah kirim pesan <b>di dalam topik</b> (bukan di General).</small></p>
+<p><small><b>Kalau error "not enough rights" / "chat not found":</b> bot belum jadi admin, atau chat ID salah (pakai ID supergrup <code>-100...</code>, bukan ID user).</small></p>
+<p><small><b>Bot lain juga bisa kirim ke topik ini:</b><br><code>POST /api/v1/notify-public</code> body <code>{"pesan":"..."}</code> dengan header <code>X-API-Key</code>. Nomor HP/ref otomatis dibuang sebelum dikirim.</small></p>
+</div>
 </dialog>
 <dialog id="webhookGuide" aria-labelledby="webhookGuideTitle">
 <div class="dialog-head"><h2 id="webhookGuideTitle">Panduan Webhook</h2><button class="dialog-close" type="button" onclick="tutupDialog('webhookGuide')" aria-label="Tutup panduan">×</button></div>
