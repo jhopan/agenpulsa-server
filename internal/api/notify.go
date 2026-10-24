@@ -136,7 +136,9 @@ func (a *API) tesBot(w http.ResponseWriter, r *http.Request) {
 // Pakai bot token berbeda: bot notifikasi publik = bot testimoni/voice yang
 // SubscriberChannel-nya bisa dibaca orang lain.
 func (a *API) TgNotifyPublic(pesan string) {
-	token := strings.TrimSpace(a.store.GetSetting("bot_public_token", ""))
+	// Satu bot bisa dipakai untuk admin + publik. Token publik opsional:
+	// kalau kosong -> pakai token bot admin (bot yang sama, tujuan beda).
+	token := a.publicBotToken()
 	chatID := strings.TrimSpace(a.store.GetSetting("bot_public_chat_id", ""))
 	if token == "" || chatID == "" {
 		return // channel publik belum diset — diam
@@ -231,7 +233,7 @@ func (a *API) AdminChatsForTest() []string { return a.adminChats() }
 // panjangnya dibatasi. Jadi bot pengirim gak bisa bocorin data pelanggan
 // ke channel publik.
 func (a *API) TgNotifyPublicCustom(pesan string) bool {
-	token := strings.TrimSpace(a.store.GetSetting("bot_public_token", ""))
+	token := a.publicBotToken()
 	chatID := strings.TrimSpace(a.store.GetSetting("bot_public_chat_id", ""))
 	if token == "" || chatID == "" {
 		return false
@@ -266,3 +268,18 @@ func (a *API) TgNotifyPublicCustom(pesan string) bool {
 	}
 	return true
 }
+
+
+// publicBotToken: token bot untuk channel publik. Kalau bot_public_token
+// kosong -> pakai bot_tg_token (SATU bot untuk admin + publik).
+// Bot yang sama bisa kirim ke chat pribadi admin DAN topik supergrup —
+// cukup beda chat_id + message_thread_id.
+func (a *API) publicBotToken() string {
+	if t := strings.TrimSpace(a.store.GetSetting("bot_public_token", "")); t != "" {
+		return t
+	}
+	return strings.TrimSpace(a.store.GetSetting("bot_tg_token", ""))
+}
+
+// PublicBotTokenForTest: export publicBotToken buat test.
+func (a *API) PublicBotTokenForTest() string { return a.publicBotToken() }

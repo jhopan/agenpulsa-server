@@ -695,3 +695,26 @@ func TestNotifAdminWhitelist(t *testing.T) {
 	}
 }
 
+
+// TestPublicBotTokenFallback: kalau token publik kosong, pakai token bot admin
+// (satu bot untuk dua tujuan: chat pribadi admin + topik supergrup).
+func TestPublicBotTokenFallback(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+	a := api.New(store, mustEngine(t, store), testWebFS())
+
+	// kosong semua -> kosong
+	if a.PublicBotTokenForTest() != "" {
+		t.Error("tanpa token harusnya kosong")
+	}
+	// hanya token admin -> dipakai untuk publik
+	_ = store.SetSetting("bot_tg_token", "TOKEN-ADMIN")
+	if got := a.PublicBotTokenForTest(); got != "TOKEN-ADMIN" {
+		t.Errorf("harus fallback ke token admin, dapat %q", got)
+	}
+	// token publik diisi -> pakai itu
+	_ = store.SetSetting("bot_public_token", "TOKEN-PUBLIK")
+	if got := a.PublicBotTokenForTest(); got != "TOKEN-PUBLIK" {
+		t.Errorf("harus pakai token publik, dapat %q", got)
+	}
+}
