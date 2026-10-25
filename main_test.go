@@ -718,3 +718,27 @@ func TestPublicBotTokenFallback(t *testing.T) {
 		t.Errorf("harus pakai token publik, dapat %q", got)
 	}
 }
+
+// TestExpireTidakDobel: expirePending 2x untuk order yang sama harus
+// menghasilkan 1 perubahan status (anti notif dobel).
+func TestExpireTidakDobel(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	defer srv.Close()
+
+	lama := db.NowWIB().Add(-10 * time.Minute).Format("2006-01-02 15:04:05")
+	o := &db.Order{Ref: "dobel-1", Nomor: "081234567890", Label: "T",
+		Status: "pending_payment", Sumber: "api", CreatedAt: lama, UpdatedAt: lama}
+	if _, err := store.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	a := api.New(store, mustEngine(t, store), testWebFS())
+	a.ExpirePendingForTest()
+	a.ExpirePendingForTest() // tick kedua
+	a.ExpirePendingForTest() // tick ketiga
+
+	// hitung berapa kali status berubah -> harus 1x
+	g, _ := store.GetOrderByRef("dobel-1")
+	if g.Status != "failed" {
+		t.Errorf("harus failed, dapat %q", g.Status)
+	}
+}

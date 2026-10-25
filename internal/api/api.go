@@ -154,8 +154,13 @@ func (a *API) expirePending(now time.Time) {
 		// Paypan gak bisa dihubungi (atau order tanpa invoice) -> mungkin user
 		// sudah bayar tapi notif belum masuk. Perlu dicek manual.
 		perluCek := status == "unknown" && o.InvoiceID != ""
-		_ = a.store.UpdateOrderStatus(o.ID, "failed",
+		// Update bersyarat: kalau order sudah diubah goroutine/tick lain,
+		// jangan kirim notif lagi (anti notif dobel).
+		ok, err := a.store.UpdateOrderStatusIf(o.ID, "pending_payment", "failed",
 			"expired — tidak dibayar dalam 5 menit", "")
+		if err != nil || !ok {
+			continue
+		}
 		log.Printf("[EXPIRE] order #%d (ref %s) lewat 5 menit -> failed", o.ID, o.Ref)
 		a.notifExpired(o, perluCek)
 	}
@@ -801,8 +806,13 @@ func (a *API) watchdogTick() {
 // failStuckOrder: order nyangkut -> failed + notif admin (TANPA retry).
 func (a *API) failStuckOrder(o *db.Order, alasan string) {
 	{
-		_ = a.store.UpdateOrderStatus(o.ID, "failed",
+		// status asal bisa 'running' atau 'queued'
+		from := o.Status
+		ok, err := a.store.UpdateOrderStatusIf(o.ID, from, "failed",
 			alasan+" — tidak diproses otomatis, cek manual", "")
+		if err != nil || !ok {
+			return // sudah diubah pihak lain — jangan notif dobel
+		}
 		log.Printf("[WATCHDOG] order #%d (ref %s) nyangkut: %s -> failed + notif", o.ID, o.Ref, alasan)
 		a.TgNotify("🚨 *Order Nyangkut*\n\n" +
 			"🔖 Ref: `" + o.Ref + "`\n" +

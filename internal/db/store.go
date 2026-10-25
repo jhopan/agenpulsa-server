@@ -223,6 +223,26 @@ func (s *Store) UpdateOrderStatus(id int64, status, pesan, orderIDIsip string) e
 	return err
 }
 
+// UpdateOrderStatusIf: update status HANYA kalau status sekarang masih
+// `from`. Return true kalau benar-benar berubah (RowsAffected=1).
+//
+// Dipakai expire/watchdog: mencegah notif dobel + mencegah 2 goroutine
+// memproses order yang sama. Kalau DB sibuk (SQLITE_BUSY) -> false, dan
+// caller TIDAK boleh kirim notif (nanti dicoba tick berikutnya).
+func (s *Store) UpdateOrderStatusIf(id int64, from, to, pesan, orderIDIsip string) (bool, error) {
+	res, err := s.DB.Exec(`UPDATE orders SET status=?,pesan=?,order_id_isipulsa=CASE WHEN ?='' THEN order_id_isipulsa ELSE ? END,updated_at=?
+		WHERE id=? AND status=?`,
+		to, pesan, orderIDIsip, orderIDIsip, NowWIB().Format("2006-01-02 15:04:05"), id, from)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
 // SetOrderInvoice simpan id invoice paypan ke order.
 func (s *Store) SetOrderInvoice(id int64, invoiceID string, expiresAt int64) error {
 	_, err := s.DB.Exec("UPDATE orders SET invoice_id=?,expires_at=?,updated_at=? WHERE id=?",
