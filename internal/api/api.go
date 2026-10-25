@@ -18,6 +18,7 @@ import (
 
 	"github.com/jhopan/agenpulsa-server/internal/db"
 	"github.com/jhopan/agenpulsa-server/internal/engine"
+	"github.com/jhopan/agenpulsa-server/internal/version"
 )
 
 type API struct {
@@ -41,7 +42,7 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 		store: store, eng: eng, web: sub, ppCfg: cfg, ppClient: NewPaypanClient(cfg),
 		orderLimiter: newRateLimiter(10, 5*time.Minute), // 10 order / 5 menit / kunci
 		startedAt:    time.Now(),
-		version:      "1.2.0",
+		version:      version.String(),
 	}
 	// notif hasil order -> 2 channel:
 	//  - admin  : lengkap (nomor, ref, modal, profit, pesan error)

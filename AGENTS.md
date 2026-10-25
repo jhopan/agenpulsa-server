@@ -155,6 +155,48 @@ Order gagal setelah bayar (maintenance/saldo agen habis): status failed + pesan 
 
 Endpoint health juga dipakai auto-ping: `https://agenpulsa.jhopan.my.id/health`.
 
+## Rilis & update (GitHub Releases)
+
+Repo punya **GitHub Actions** (`.github/workflows/release.yml`): push tag `v*`
+→ test → build `linux/amd64` + `linux/arm64` → publish release.
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+Artefak per release:
+- `agenpulsa-server-linux-amd64` / `-arm64` (binary tunggal)
+- `agenpulsa-server_<ver>_linux_amd64.tar.gz` / `_arm64.tar.gz` (binary + `web/` + `helper/`)
+- `checksums.txt` (sha256)
+
+**"Latest"** = release terbaru non-draft/non-prerelease (otomatis via `make_latest: true`).
+Link stabil:
+- semua versi: `https://github.com/jhopan/agenpulsa-server/releases`
+- terbaru: `https://github.com/jhopan/agenpulsa-server/releases/latest`
+- unduh langsung: `.../releases/latest/download/agenpulsa-server-linux-amd64`
+
+**Install / update di server (tanpa Go):**
+
+```bash
+# install baru
+curl -fsSL https://raw.githubusercontent.com/jhopan/agenpulsa-server/master/install.sh | bash
+# update ke latest
+curl -fsSL .../install.sh | bash -s -- update
+# versi tertentu
+curl -fsSL .../install.sh | bash -s -- update v1.2.0
+```
+
+`install.sh` = deteksi arsitektur → download paket → **backup binary lama** →
+pasang systemd + `.env` (kalau belum ada) → restart → cek `/health` →
+**rollback otomatis** kalau gagal start.
+
+**Versi di binary**: di-inject via ldflags dari `internal/version`
+(`Version`, `Commit`, `BuildDate`). Build lokal = `dev`.
+Cek: `agenpulsa-server --version` atau `GET /health` field `version`.
+
+Catatan deploy manual (tanpa release) tetap ada di `DEPLOY.md`.
+
 ## Verifikasi
 
 ```bash

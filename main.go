@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -10,12 +11,21 @@ import (
 	"github.com/jhopan/agenpulsa-server/internal/db"
 	"github.com/jhopan/agenpulsa-server/internal/engine"
 	"github.com/jhopan/agenpulsa-server/internal/scheduler"
+	"github.com/jhopan/agenpulsa-server/internal/version"
 )
 
 //go:embed web
 var webFS embed.FS
 
 func main() {
+	// --version / -version: cetak versi lalu keluar (dipakai install.sh & cek update).
+	for _, a := range os.Args[1:] {
+		if a == "--version" || a == "-version" || a == "version" {
+			fmt.Println(version.String())
+			return
+		}
+	}
+
 	port := os.Getenv("AP_PORT")
 	if port == "" {
 		port = "8081"

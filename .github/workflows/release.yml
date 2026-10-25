@@ -1,0 +1,185 @@
+name: Release
+
+# Rilis otomatis: push tag v* -> build amd64+arm64 -> upload ke GitHub Releases.
+# "Latest" otomatis = rilis terbaru yang bukan pre-release/draft.
+#
+# Cara rilis:
+#   git tag v1.3.0
+#   git push origin v1.3.0
+#
+# Hasil (di halaman Releases):
+#   agenpulsa-server-linux-amd64
+#   agenpulsa-server-linux-arm64
+#   agenpulsa-server_<ver>_linux_amd64.tar.gz   (binary + web + helper)
+#   agenpulsa-server_<ver>_linux_arm64.tar.gz
+#   checksums.txt
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual run dari tab Actions (buat tes build tanpa rilis).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.25.x'
+
+jobs:
+  # ---------- 1. test dulu, jangan rilis kalau gagal ----------
+  test:
+    name: Test & vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./... -count=1
+
+  # ---------- 2. build 2 arsitektur ----------
+  build:
+    name: Build ${{ matrix.goarch }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+          - goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Tentukan versi
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          go build -trimpath             -ldflags "-s -w \
+              -X github.com/jhopan/agenpulsa-server/internal/version.Version=${{ steps.ver.outputs.version }} \
+              -X github.com/jhopan/agenpulsa-server/internal/version.Commit=${{ steps.ver.outputs.commit }} \
+              -X github.com/jhopan/agenpulsa-server/internal/version.BuildDate=${{ steps.ver.outputs.date }}"             -o dist/agenpulsa-server-linux-${{ matrix.goarch }} .
+
+      - name: Verifikasi binary
+        run: |
+          file dist/agenpulsa-server-linux-${{ matrix.goarch }} | grep -q 'ELF 64-bit' && echo "ELF OK"
+
+      - name: Paket tar.gz (binary + web + helper)
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          PKG="agenpulsa-server_${VER#v}_linux_${{ matrix.goarch }}"
+          mkdir -p "dist/$PKG"
+          cp dist/agenpulsa-server-linux-${{ matrix.goarch }} "dist/$PKG/agenpulsa-server"
+          cp -r web "dist/$PKG/web"
+          cp -r helper "dist/$PKG/helper"
+          cp DEPLOY.md "dist/$PKG/" 2>/dev/null || true
+          tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
+          rm -rf "dist/$PKG"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.goarch }}
+          path: |
+            dist/agenpulsa-server-linux-${{ matrix.goarch }}
+            dist/*.tar.gz
+          retention-days: 7
+
+  # ---------- 3. rilis ke GitHub Releases ----------
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download semua artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum agenpulsa-server-linux-* *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Catatan rilis dari commits
+        id: notes
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || echo "")
+          if [ -z "$PREV" ]; then
+            echo "body=## Perubahan awal (${GITHUB_REF_NAME})" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "body<<EOF"
+              echo "## Perubahan sejak ${PREV}"
+              echo ""
+              git log --no-merges --pretty=format:"- %s" "${PREV}..${GITHUB_REF_NAME}"
+              echo ""
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Buat release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ${{ steps.notes.outputs.body }}
+
+            ---
+
+            ### Install / update
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | bash -s -- update
+            ```
+
+            ### Binary langsung
+
+            | Platform | File |
+            |---|---|
+            | Linux x86_64 (debian/ubuntu) | `agenpulsa-server-linux-amd64` |
+            | Linux ARM64 (armbian/raspi) | `agenpulsa-server-linux-arm64` |
+
+            Paket lengkap (binary + `web/` + `helper/`): `agenpulsa-server_*_linux_*.tar.gz`
+
+            Cek integritas: `checksums.txt` (sha256).
+          files: |
+            dist/agenpulsa-server-linux-amd64
+            dist/agenpulsa-server-linux-arm64
+            dist/*.tar.gz
+            dist/checksums.txt
+          draft: false
+          prerelease: false
+          make_latest: true
