@@ -101,9 +101,15 @@ func validJadwal(req *jadwalReq) error {
 		}
 		// guard: tanggal jadwal tidak boleh di masa lalu (mulai hari ini WIB).
 		// Berlaku utk semua sumber (bot TG/WA/API) — jadwal kemarin langsung ditolak.
+		//
+		// CATATAN: JANGAN pakai time.Truncate(24h) — itu memotong berdasarkan
+		// epoch UTC, sehingga "awal hari" WIB jadi 07:00 WIB (UTC+7), bukan
+		// 00:00. Akibatnya jadwal 00:00-06:59 hari ini ikut lolos padahal
+		// sudah lewat. Pakai tanggal kalender eksplisit.
 		if t, err := time.ParseInLocation("02/01/2006 15:04", req.Jam, db.WIBLoc()); err == nil {
-			today := db.NowWIB().Truncate(24 * time.Hour)
-			if t.Before(today) {
+			now := db.NowWIB()
+			awalHari := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, db.WIBLoc())
+			if t.Before(awalHari) {
 				return fmt.Errorf("tanggal jadwal %s sudah lewat — minimal hari ini (WIB)", req.Jam[:10])
 			}
 		}
