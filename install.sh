@@ -26,6 +26,7 @@ DIR="/opt/agenpulsa"
 DATA_DIR="$DIR/data"
 BIN="$DIR/agenpulsa-server"
 SERVICE="agenpulsa-server"
+MANAGE="/usr/local/bin/ap"
 PORT="${AP_PORT:-8081}"
 API="https://api.github.com/repos/$REPO/releases"
 
@@ -92,6 +93,7 @@ download_release() {
   rootdir="$(dirname "$extracted")"
   [[ -d "$rootdir/web" ]] && cp -r "$rootdir/web/." "$DIR/web/" 2>/dev/null || true
   [[ -d "$rootdir/helper" ]] && cp -r "$rootdir/helper/." "$DIR/helper/" 2>/dev/null || true
+  [[ -f "$rootdir/manage.sh" ]] && install -m 0755 "$rootdir/manage.sh" "$DIR/manage.sh"
 
   rm -rf "$tmp"
   say "binary terpasang: $BIN ($("$BIN" --version 2>/dev/null || echo "$ver"))"
@@ -130,6 +132,14 @@ EOF
     systemctl daemon-reload
     systemctl enable "$SERVICE" >/dev/null 2>&1 || true
     say "systemd service dibuat"
+  fi
+}
+
+# ---------- CLI `ap` (start/stop/update/backup) ----------
+ensure_cli() {
+  if [[ -f "$DIR/manage.sh" ]]; then
+    install -m 0755 "$DIR/manage.sh" "$MANAGE"
+    say "CLI terpasang: ap (ketik 'ap' untuk menu)"
   fi
 }
 
@@ -173,9 +183,14 @@ main() {
       say "target: $ver ($arch)"
       download_release "$ver" "$arch"
       ensure_service
+      ensure_cli
       restart_and_check
       echo
-      say "selesai. Web admin: http://$(hostname -I | awk '{print $1}'):$PORT/admin"
+      say "selesai."
+      echo
+      echo -e "  ${C}Web admin${R} : http://$(hostname -I | awk '{print $1}'):$PORT/admin"
+      echo -e "  ${C}CLI${R}       : ap (menu) | ap status | ap update | ap log"
+      echo
       ;;
     *)
       die "mode tidak dikenal: $mode (pakai: install|update [versi])"

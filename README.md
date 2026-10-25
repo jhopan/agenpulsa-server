@@ -46,10 +46,36 @@ curl -fsSL https://raw.githubusercontent.com/jhopan/agenpulsa-server/master/inst
 
 Script akan: deteksi arsitektur (amd64/arm64) → download paket release → backup binary lama → pasang systemd service (kalau belum ada) → restart → cek `/health`. Kalau gagal start, **otomatis rollback** ke binary sebelumnya.
 
+### Setelah terpasang — CLI `ap`
+
+`install.sh` memasang perintah **`ap`** ke `/usr/local/bin/ap`:
+
+```bash
+ap                 # menu interaktif
+ap status          # status + versi + health
+ap start           # nyalakan
+ap stop            # matikan
+ap restart         # restart
+ap log             # log terakhir (follow)
+ap update          # update ke latest
+ap update v1.2.0   # update/pasang versi tertentu
+ap version         # versi terpasang
+ap health          # cek /health
+ap backup          # backup DB + binary sekarang
+ap restore <file>  # restore DB dari backup
+```
+
+Service sudah **enabled** (auto-start saat boot). Jadi setelah reboot tinggal jalan sendiri.
+
 ### Halaman release
 
 - Semua versi: https://github.com/jhopan/agenpulsa-server/releases
-- Selalu versi terbaru: https://github.com/jhopan/agenpulsa-server/releases/latest
+- **Latest** (selalu versi terbaru): https://github.com/jhopan/agenpulsa-server/releases/latest
+
+> Catatan: GitHub tidak membuat entri release terpisah bernama "latest". Yang ada:
+> **tag terbaru ditandai badge `Latest`**, dan URL `/releases/latest` selalu
+> redirect ke tag itu. Semua link download di bawah pakai `/latest/download/...`
+> sehingga otomatis ikut versi terbaru.
 
 ### Download manual
 

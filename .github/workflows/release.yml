@@ -96,6 +96,7 @@ jobs:
           cp dist/agenpulsa-server-linux-${{ matrix.goarch }} "dist/$PKG/agenpulsa-server"
           cp -r web "dist/$PKG/web"
           cp -r helper "dist/$PKG/helper"
+          cp manage.sh "dist/$PKG/" 2>/dev/null || true
           cp DEPLOY.md "dist/$PKG/" 2>/dev/null || true
           tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
           rm -rf "dist/$PKG"

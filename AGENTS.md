@@ -188,8 +188,29 @@ curl -fsSL .../install.sh | bash -s -- update v1.2.0
 ```
 
 `install.sh` = deteksi arsitektur → download paket → **backup binary lama** →
-pasang systemd + `.env` (kalau belum ada) → restart → cek `/health` →
-**rollback otomatis** kalau gagal start.
+pasang systemd + `.env` (kalau belum ada) → pasang CLI `ap` → restart → cek
+`/health` → **rollback otomatis** kalau gagal start.
+
+**CLI `ap`** (`manage.sh` → `/usr/local/bin/ap`) — satu perintah untuk operasional:
+
+| Perintah | Fungsi |
+|---|---|
+| `ap` | menu interaktif |
+| `ap status` | service + versi + health + autostart |
+| `ap start` / `stop` / `restart` | kontrol service |
+| `ap log` | log terakhir + follow |
+| `ap update [versi]` | update ke latest / versi tertentu (delegasi ke install.sh) |
+| `ap version` / `ap health` | cek versi / `/health` |
+| `ap backup` | backup DB (`.backup`, konsisten) + binary |
+| `ap restore <file>` | restore DB (backup dulu otomatis) |
+
+Service `enabled` = auto-start saat boot, jadi `ap start` hanya perlu kalau
+sengaja dimatikan.
+
+**Soal "latest"**: GitHub TIDAK bikin entri release terpisah bernama latest.
+Mekanismenya: tag terbaru diberi badge `Latest`, dan `/releases/latest`
+redirect ke tag itu. Semua URL `/releases/latest/download/<file>` otomatis
+ikut versi terbaru — jadi jangan cari entri "latest" di daftar.
 
 **Versi di binary**: di-inject via ldflags dari `internal/version`
 (`Version`, `Commit`, `BuildDate`). Build lokal = `dev`.
