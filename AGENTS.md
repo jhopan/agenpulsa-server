@@ -207,10 +207,27 @@ pasang systemd + `.env` (kalau belum ada) → pasang CLI `ap` → restart → ce
 Service `enabled` = auto-start saat boot, jadi `ap start` hanya perlu kalau
 sengaja dimatikan.
 
-**Soal "latest"**: GitHub TIDAK bikin entri release terpisah bernama latest.
-Mekanismenya: tag terbaru diberi badge `Latest`, dan `/releases/latest`
-redirect ke tag itu. Semua URL `/releases/latest/download/<file>` otomatis
-ikut versi terbaru — jadi jangan cari entri "latest" di daftar.
+**DUA release per tag** (pola sama dengan PanRouter):
+
+| Release | Tag | Isi |
+|---|---|---|
+| Ber-versi | `v1.2.1` | build versi itu, catatan = commit sejak tag sebelumnya |
+| **latest** | `latest` (digeser paksa tiap rilis) | build terbaru, **nama file stabil** |
+
+Workflow melakukan: buat release `vX.Y.Z` → `git tag -f latest` +
+`git push origin latest --force` → hapus release `latest` lama → buat ulang
+release `latest` (`--latest`) berisi file bernama stabil:
+
+```
+agenpulsa-server-latest-linux-amd64.tar.gz
+agenpulsa-server-latest-linux-arm64.tar.gz
+checksums.txt
+```
+
+Kenapa nama stabil: URL `/releases/latest/download/<nama>` jadi tidak pernah
+404 walau versi berganti. `install.sh` memakai URL ini untuk mode `update`
+(tanpa argumen). Pin versi tetap bisa lewat `ap update v1.2.0` →
+`/releases/download/v1.2.0/...`.
 
 **Versi di binary**: di-inject via ldflags dari `internal/version`
 (`Version`, `Commit`, `BuildDate`). Build lokal = `dev`.

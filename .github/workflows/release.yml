@@ -110,7 +110,7 @@ jobs:
             dist/*.tar.gz
           retention-days: 7
 
-  # ---------- 3. rilis ke GitHub Releases ----------
+  # ---------- 3. rilis: versi (vX.Y.Z) + latest ----------
   release:
     name: Publish release
     needs: build
@@ -127,60 +127,107 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Checksums
+      - name: Siapkan aset (versi + nama stabil utk latest)
+        id: prep
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           cd dist
+          # nama stabil: URL /latest/download/<nama> tidak berubah antar versi
+          cp "agenpulsa-server_${VERSION}_linux_amd64.tar.gz" agenpulsa-server-latest-linux-amd64.tar.gz
+          cp "agenpulsa-server_${VERSION}_linux_arm64.tar.gz" agenpulsa-server-latest-linux-arm64.tar.gz
           sha256sum agenpulsa-server-linux-* *.tar.gz > checksums.txt
-          cat checksums.txt
+          ls -lah
 
       - name: Catatan rilis dari commits
         id: notes
         run: |
-          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || echo "")
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null | grep -E '^v[0-9]' || true)
           if [ -z "$PREV" ]; then
-            echo "body=## Perubahan awal (${GITHUB_REF_NAME})" >> "$GITHUB_OUTPUT"
-          else
-            {
-              echo "body<<EOF"
-              echo "## Perubahan sejak ${PREV}"
-              echo ""
-              git log --no-merges --pretty=format:"- %s" "${PREV}..${GITHUB_REF_NAME}"
-              echo ""
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
+            PREV=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1 || true)
           fi
+          {
+            echo "# AgenPulsa Server ${GITHUB_REF_NAME}"
+            echo ""
+            echo "> **By JhopanStore** — [repo](https://github.com/${{ github.repository }})"
+            echo ""
+            echo "## Perubahan"
+            echo ""
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty=format:"- %s" "${PREV}..${GITHUB_REF_NAME}"
+            else
+              git log --no-merges --pretty=format:"- %s" HEAD~20..HEAD
+            fi
+            echo ""
+            echo ""
+            echo "## Install / Update"
+            echo ""
+            echo '```bash'
+            echo "# install baru"
+            echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | bash"
+            echo ""
+            echo "# update ke latest"
+            echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | bash -s -- update"
+            echo ""
+            echo "# atau kalau CLI ap sudah terpasang"
+            echo "ap update"
+            echo '```'
+            echo ""
+            echo "## Binary"
+            echo ""
+            echo "| Platform | File |"
+            echo "|---|---|"
+            echo "| Linux x86_64 | `agenpulsa-server-linux-amd64` |"
+            echo "| Linux ARM64 | `agenpulsa-server-linux-arm64` |"
+            echo ""
+            echo "Paket lengkap (binary + web + helper): `agenpulsa-server_${VERSION}_linux_*.tar.gz`"
+          } > /tmp/notes.md
+          cat /tmp/notes.md | head -20
 
-      - name: Buat release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          body: |
-            ${{ steps.notes.outputs.body }}
-
-            ---
-
-            ### Install / update
-
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/install.sh | bash -s -- update
-            ```
-
-            ### Binary langsung
-
-            | Platform | File |
-            |---|---|
-            | Linux x86_64 (debian/ubuntu) | `agenpulsa-server-linux-amd64` |
-            | Linux ARM64 (armbian/raspi) | `agenpulsa-server-linux-arm64` |
-
-            Paket lengkap (binary + `web/` + `helper/`): `agenpulsa-server_*_linux_*.tar.gz`
-
-            Cek integritas: `checksums.txt` (sha256).
-          files: |
-            dist/agenpulsa-server-linux-amd64
-            dist/agenpulsa-server-linux-arm64
-            dist/*.tar.gz
+      # --- 1) release berversi ---
+      - name: Buat release versi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "AgenPulsa Server ${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md \
+            dist/agenpulsa-server-linux-amd64 \
+            dist/agenpulsa-server-linux-arm64 \
+            dist/agenpulsa-server_*_linux_*.tar.gz \
             dist/checksums.txt
-          draft: false
-          prerelease: false
-          make_latest: true
+
+      # --- 2) release "latest" (tag digeser paksa, selalu menunjuk build terbaru) ---
+      - name: Geser tag latest
+        run: |
+          git tag -f latest
+          git push origin latest --force
+
+      - name: Buat ulang release latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.prep.outputs.VERSION }}"
+          # hapus release latest lama (tag tetap, akan dipakai ulang)
+          gh release delete latest --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+
+          gh release create latest \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Latest Build" \
+            --latest \
+            --notes "Build otomatis dari versi terbaru AgenPulsa Server (by JhopanStore).
+
+          Sekarang menunjuk ke **${GITHUB_REF_NAME}** (`${VERSION}`).
+
+          URL stabil:
+          - `https://github.com/${{ github.repository }}/releases/latest/download/agenpulsa-server-latest-linux-amd64.tar.gz`
+          - `https://github.com/${{ github.repository }}/releases/latest/download/agenpulsa-server-latest-linux-arm64.tar.gz`
+          - `https://github.com/${{ github.repository }}/releases/latest/download/checksums.txt`
+
+          Untuk versi tertentu, lihat [daftar release](https://github.com/${{ github.repository }}/releases)." \
+            dist/agenpulsa-server-latest-linux-amd64.tar.gz \
+            dist/agenpulsa-server-latest-linux-arm64.tar.gz \
+            dist/agenpulsa-server_${VERSION}_linux_amd64.tar.gz \
+            dist/agenpulsa-server_${VERSION}_linux_arm64.tar.gz \
+            dist/checksums.txt

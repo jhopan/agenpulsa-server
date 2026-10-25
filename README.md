@@ -67,15 +67,28 @@ ap restore <file>  # restore DB dari backup
 
 Service sudah **enabled** (auto-start saat boot). Jadi setelah reboot tinggal jalan sendiri.
 
-### Halaman release
+### Halaman release — dua jenis
 
-- Semua versi: https://github.com/jhopan/agenpulsa-server/releases
-- **Latest** (selalu versi terbaru): https://github.com/jhopan/agenpulsa-server/releases/latest
+Setiap kali tag `v*` di-push, CI membuat **dua release**:
 
-> Catatan: GitHub tidak membuat entri release terpisah bernama "latest". Yang ada:
-> **tag terbaru ditandai badge `Latest`**, dan URL `/releases/latest` selalu
-> redirect ke tag itu. Semua link download di bawah pakai `/latest/download/...`
-> sehingga otomatis ikut versi terbaru.
+| Release | Isi | Link |
+|---|---|---|
+| **v1.2.1** (berversi) | build spesifik versi itu, catatan = daftar commit | `/releases/tag/v1.2.1` |
+| **latest** | build terbaru, tag digeser otomatis tiap rilis, **URL stabil** | `/releases/latest` |
+
+Release **latest** punya nama file yang **tidak berubah antar versi**, jadi URL-nya bisa dipakai selamanya:
+
+```
+https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server-latest-linux-amd64.tar.gz
+https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server-latest-linux-arm64.tar.gz
+https://github.com/jhopan/agenpulsa-server/releases/latest/download/checksums.txt
+```
+
+Versi tertentu (pin):
+
+```
+https://github.com/jhopan/agenpulsa-server/releases/download/v1.2.1/agenpulsa-server_1.2.1_linux_amd64.tar.gz
+```
 
 ### Download manual
 
@@ -89,11 +102,11 @@ chmod +x agenpulsa-server-linux-amd64
 curl -fLO https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server-linux-arm64
 ```
 
-Paket lengkap (binary + `web/` + `helper/`):
+Paket lengkap (binary + `web/` + `helper/` + `manage.sh`) — **nama stabil**:
 
 ```
-https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server_<versi>_linux_amd64.tar.gz
-https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server_<versi>_linux_arm64.tar.gz
+https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server-latest-linux-amd64.tar.gz
+https://github.com/jhopan/agenpulsa-server/releases/latest/download/agenpulsa-server-latest-linux-arm64.tar.gz
 ```
 
 Cek integritas: `checksums.txt` (sha256) di halaman release.

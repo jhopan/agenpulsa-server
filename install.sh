@@ -58,16 +58,35 @@ ensure_tools() {
 
 # ---------- ambil versi ----------
 # latest_version: tag dari release terbaru (bukan draft/prerelease)
+# latest_version: cari tag versi terbaru (v*), bukan tag "latest" itu sendiri.
+# Kalau repo punya release "latest" khusus, isinya tetap menunjuk versi terbaru.
 latest_version() {
-  curl -fsSL "$API/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+  # 1) coba release "latest" -> catat versi yang ditunjuk (dari body/notes)
+  local v
+  v="$(curl -fsSL "$API/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  if [[ -n "$v" && "$v" != "latest" ]]; then
+    echo "$v"; return
+  fi
+  # 2) tag "latest" -> ambil versi dari daftar release (tag v* terbaru)
+  curl -fsSL "$API?per_page=30" 2>/dev/null \
+    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\(v[^"]*\)".*/\1/p' \
+    | head -1
 }
 
 # ---------- download paket ----------
 download_release() {
   local ver="$1" arch="$2"
   local plain="${ver#v}"
-  local pkg="agenpulsa-server_${plain}_linux_${arch}.tar.gz"
-  local url="https://github.com/$REPO/releases/download/$ver/$pkg"
+  # Untuk versi "latest": pakai nama file STABIL (tidak berubah antar versi),
+  # jadi URL /releases/latest/download/... selalu valid.
+  local pkg url
+  if [[ "$ver" == "latest" ]]; then
+    pkg="agenpulsa-server-latest-linux-${arch}.tar.gz"
+    url="https://github.com/$REPO/releases/latest/download/$pkg"
+  else
+    pkg="agenpulsa-server_${plain}_linux_${arch}.tar.gz"
+    url="https://github.com/$REPO/releases/download/$ver/$pkg"
+  fi
   local tmp
   tmp="$(mktemp -d)"
 
