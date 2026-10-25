@@ -27,7 +27,10 @@ DATA_DIR="$DIR/data"
 BIN="$DIR/agenpulsa-server"
 SERVICE="agenpulsa-server"
 MANAGE="/usr/local/bin/ap"
-PORT="${AP_PORT:-8081}"
+# PORT: dari env AP_PORT, atau .env yang sudah ada, atau default 8081.
+_env_port() { grep -E '^AP_PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]'; }
+PORT="${AP_PORT:-$(_env_port)}"
+PORT="${PORT:-8081}"
 API="https://api.github.com/repos/$REPO/releases"
 
 R="\033[0m"; G="\033[1;32m"; Y="\033[1;33m"; RED="\033[1;31m"; C="\033[1;36m"
