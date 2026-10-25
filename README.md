@@ -65,7 +65,32 @@ ap backup          # backup DB + binary sekarang
 ap restore <file>  # restore DB dari backup
 ap port 8800       # ganti port (update .env + restart)
 ap config          # lihat config efektif (tanpa secret)
+ap topic           # deteksi chat_id + message_thread_id otomatis
 ```
+
+### Cara ambil `chat_id` + `message_thread_id` (supergrup/topik)
+
+`getUpdates` sering kosong karena bot belum pernah menerima pesan. Pakai:
+
+```bash
+ap topic           # mendengarkan 120 detik
+```
+
+Lalu **kirim pesan apa saja di dalam topik** (mis. ketik `tes` di topik Testimoni).
+Output langsung menampilkan:
+
+```
+=== DITEMUKAN ===
+  chat_id            : -1001234567890
+  message_thread_id  : 12
+  tipe chat          : supergroup
+  judul              : JhopanStore
+```
+
+Tinggal salin ke Pengaturan → Channel Publik. Kalau `message_thread_id` kosong,
+berarti pesan tadi masuk di **General** — kirim ulang di dalam topik.
+
+Syarat: bot sudah di-add ke supergrup dan dijadikan **admin**.
 
 **Update tidak menimpa config.** Saat `ap update`:
 

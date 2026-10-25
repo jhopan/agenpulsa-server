@@ -205,6 +205,13 @@ pasang systemd + `.env` (kalau belum ada) → pasang CLI `ap` → restart → ce
 | `ap restore <file>` | restore DB (backup dulu otomatis) |
 | `ap port <n>` | ganti port: update `.env` + restart, ingatkan tunnel |
 | `ap config` | tampilkan config infra + runtime (tanpa secret) |
+| `ap topic` | deteksi `chat_id` + `message_thread_id` via long-polling (kirim pesan di topik) |
+
+**Ambil `message_thread_id` tanpa getUpdates manual**: `ap topic` long-polling
+`getUpdates` (offset disimpan di `/tmp/.ap_topic_offset`), lalu cetak
+`chat_id`/`message_thread_id`/tipe/judul. Kalau webhook bot aktif, getUpdates
+diblokir → script berhenti & kasih instruksi hapus webhook. Kalau
+`message_thread_id` kosong = pesan masuk di General, bukan topik.
 
 **Update = NON-DESTRUKTIF.** `install.sh`/`ap update` tidak pernah menyentuh:
 `data/` (SQLite), `profile/` (cookies), `.env` (port/path), service file.

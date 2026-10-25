@@ -180,6 +180,119 @@ do_config() {
   echo "  web: http://$(hostname -I | awk '{print $1}'):$p/admin"
 }
 
+# ============================================================
+# ap topic — deteksi chat_id + message_thread_id otomatis
+#
+# Cara pakai:
+#   1) jalankan: ap topic
+#   2) kirim pesan APA SAJA di topik yang dituju (di supergrup)
+#   3) ID langsung muncul di layar
+#
+# Bekerja dengan long-polling getUpdates (bot tidak perlu webhook).
+# ============================================================
+do_topic() {
+  local tunggu="${1:-120}"
+  local token dbp
+  dbp="$DIR/data/agenpulsa.db"
+  token="$(sqlite3 "$dbp" "SELECT value FROM settings WHERE key='bot_tg_token'" 2>/dev/null)"
+  if [[ -z "$token" ]]; then
+    # fallback: token bot publik
+    token="$(sqlite3 "$dbp" "SELECT value FROM settings WHERE key='bot_public_token'" 2>/dev/null)"
+  fi
+  [[ -n "$token" ]] || die "token bot belum diset (web admin → Pengaturan → Bot token)"
+  command -v python3 >/dev/null 2>&1 || die "butuh python3"
+
+  # kalau ada webhook, getUpdates ditolak -> matikan sementara
+  local wh
+  wh="$(curl -s --max-time 10 "https://api.telegram.org/bot$token/getWebhookInfo" \
+        | python3 -c 'import json,sys;print(json.load(sys.stdin).get("result",{}).get("url",""))' 2>/dev/null)"
+  if [[ -n "$wh" ]]; then
+    warn "bot ini punya webhook aktif ($wh) — getUpdates diblokir."
+    warn "hapus dulu: curl -F url= https://api.telegram.org/bot<TOKEN>/setWebhook"
+    die "berhenti"
+  fi
+
+  local offset_file="/tmp/.ap_topic_offset"
+  touch "$offset_file"
+  local offset; offset="$(cat "$offset_file" 2>/dev/null || echo 0)"
+
+  say "mendengarkan pesan selama ${tunggu}s…"
+  echo -e "  ${C}Kirim pesan APA SAJA di topik yang kamu mau${R}"
+  echo "  (misal di topik Testimoni: ketik 'tes' lalu Enter)"
+  echo
+
+  local end=$(( $(date +%s) + tunggu ))
+  while [[ $(date +%s) -lt $end ]]; do
+    local resp
+    resp="$(curl -s --max-time 30 "https://api.telegram.org/bot$token/getUpdates?timeout=25&offset=$offset&limit=20" 2>/dev/null)"
+    local parsed
+    parsed="$(printf '%s' "$resp" | python3 - <<'PY'
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if not d.get("ok"):
+    print("ERR|"+(d.get("description") or "?"))
+    sys.exit(0)
+ups=d.get("result",[])
+if not ups:
+    sys.exit(0)
+last=max(u.get("update_id",0) for u in ups)
+for u in ups:
+    m = u.get("message") or u.get("channel_post") or u.get("edited_message") or {}
+    if not m: continue
+    c = m.get("chat",{}) or {}
+    cid = c.get("id")
+    if cid is None: continue
+    print("HIT|%s|%s|%s|%s|%s" % (
+        last,
+        cid,
+        m.get("message_thread_id",""),
+        c.get("type",""),
+        (c.get("title") or c.get("username") or c.get("first_name") or "")[:40],
+    ))
+PY
+)"
+    if [[ -n "$parsed" ]]; then
+      local line
+      while IFS='|' read -r kind a b c d e; do
+        if [[ "$kind" == "ERR" ]]; then
+          warn "telegram: $a"
+          return 1
+        fi
+        if [[ "$kind" == "HIT" ]]; then
+          offset="$((a+1))"; echo "$offset" > "$offset_file"
+          echo -e "${G}=== DITEMUKAN ===${R}"
+          echo "  chat_id            : $b"
+          echo "  message_thread_id  : ${c:-(kosong — bukan topik / General)}"
+          echo "  tipe chat          : $d"
+          echo "  judul              : $e"
+          echo
+          if [[ -n "$c" ]]; then
+            echo -e "${B}Isi di web admin → Pengaturan:${R}"
+            echo "  Chat / channel tujuan : $b"
+            echo "  Topik                 : $c"
+          else
+            echo -e "${B}Isi di web admin → Pengaturan:${R}"
+            echo "  Chat / channel tujuan : $b"
+            echo "  Topik                 : (kosongkan)"
+            echo
+            warn "Pesan tadi masuk di General, bukan topik. Kirim ulang DI DALAM topik."
+          fi
+          return 0
+        fi
+      done <<< "$parsed"
+    fi
+  done
+  warn "tidak ada pesan masuk dalam ${tunggu}s."
+  echo "  Pastikan:"
+  echo "   1) bot sudah di-add ke supergrup & jadi ADMIN"
+  echo "   2) pesan dikirim SETELAH perintah ini jalan"
+  echo "   3) kirim di dalam topik (bukan General)"
+  return 1
+}
+
 menu() {
   echo -e "${B}AgenPulsa Server — menu${R}"
   echo "  1) Status"
@@ -192,6 +305,7 @@ menu() {
   echo "  8) Health check"
   echo "  9) Ganti port"
   echo " 10) Lihat config"
+  echo " 11) Deteksi chat_id + topik (kirim pesan di topik)"
   echo "  0) Keluar"
   echo
   read -rp "Pilih: " c
@@ -206,6 +320,7 @@ menu() {
     8) do_health ;;
     9) read -rp "Port baru: " np; do_setport "$np" ;;
     10) do_config ;;
+    11) do_topic 120 ;;
     0|*) exit 0 ;;
   esac
 }
@@ -222,6 +337,7 @@ case "${1:-menu}" in
   health)     do_health ;;
   backup)     do_backup ;;
   port)       do_setport "${2:-}" ;;
+  topic|id)   do_topic "${2:-120}" ;;
   config)     do_config ;;
   restore)    do_restore "${2:-}" ;;
   *) die "perintah tidak dikenal: $1 (pakai: ap [start|stop|restart|status|log|update|version|health|backup|restore])" ;;
