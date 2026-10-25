@@ -63,7 +63,22 @@ ap version         # versi terpasang
 ap health          # cek /health
 ap backup          # backup DB + binary sekarang
 ap restore <file>  # restore DB dari backup
+ap port 8800       # ganti port (update .env + restart)
+ap config          # lihat config efektif (tanpa secret)
 ```
+
+**Update tidak menimpa config.** Saat `ap update`:
+
+| Bagian | Perilaku |
+|---|---|
+| `data/` (SQLite) | **tidak disentuh** |
+| `profile/` (cookies isipulsa) | **tidak disentuh** |
+| `.env` (port, path DB) | **dipertahankan** |
+| systemd service | **dipertahankan** |
+| `web/`, `helper/`, binary | ditimpa (bagian rilis) |
+| backup binary | disimpan 3 terbaru, sisanya dihapus otomatis |
+
+Jadi port/path/config apa pun yang sudah kamu set tetap dipakai setelah update.
 
 Service sudah **enabled** (auto-start saat boot). Jadi setelah reboot tinggal jalan sendiri.
 
@@ -124,7 +139,7 @@ Env (infra saja):
 
 | Env | Default | Keterangan |
 |---|---|---|
-| `AP_PORT` | `8081` | port HTTP |
+| `AP_PORT` | `8081` | port HTTP (produksi sekarang: `8800`) |
 | `AP_DB` | `data/agenpulsa.db` | path SQLite |
 | `AP_PROFILE` | `profile` | user-data-dir Chromium (cookies isipulsa) |
 

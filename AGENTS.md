@@ -203,6 +203,20 @@ pasang systemd + `.env` (kalau belum ada) → pasang CLI `ap` → restart → ce
 | `ap version` / `ap health` | cek versi / `/health` |
 | `ap backup` | backup DB (`.backup`, konsisten) + binary |
 | `ap restore <file>` | restore DB (backup dulu otomatis) |
+| `ap port <n>` | ganti port: update `.env` + restart, ingatkan tunnel |
+| `ap config` | tampilkan config infra + runtime (tanpa secret) |
+
+**Update = NON-DESTRUKTIF.** `install.sh`/`ap update` tidak pernah menyentuh:
+`data/` (SQLite), `profile/` (cookies), `.env` (port/path), service file.
+Yang ditimpa hanya `web/`, `helper/`, dan binary. Backup binary disisakan 3
+terbaru (sisanya dipangkas otomatis). Saat update, script melaporkan
+config lama yang dipertahankan (port + path DB).
+
+**Port produksi debian = `8800`** (bukan 8081/8082). Kalau ganti port, tiga
+tempat harus sinkron:
+1. `/opt/agenpulsa/.env` → `AP_PORT` (bisa via `ap port <n>`)
+2. `/etc/cloudflared/agenpulsa.yml` → `service: http://127.0.0.1:<port>`
+3. `systemctl restart agenpulsa-server cloudflare-agenpulsa`
 
 Service `enabled` = auto-start saat boot, jadi `ap start` hanya perlu kalau
 sengaja dimatikan.

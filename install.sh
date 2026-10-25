@@ -107,6 +107,8 @@ download_release() {
   if [[ -f "$BIN" ]]; then
     cp "$BIN" "$BIN.bak-$(date +%Y%m%d-%H%M%S)"
     say "backup binary lama"
+    # sisakan 3 backup terbaru (tiap backup ~16-22MB, jangan menuhin disk)
+    ls -1t "$BIN".bak-* 2>/dev/null | tail -n +4 | xargs -r rm -f
   fi
   install -m 0755 "$extracted" "$BIN"
 
@@ -122,7 +124,20 @@ download_release() {
 }
 
 # ---------- systemd + env (hanya kalau belum ada) ----------
+# ATURAN: saat UPDATE, config yang sudah ada TIDAK diubah:
+#   - .env (port/path)         -> dibiarkan apa adanya
+#   - service file             -> dibiarkan apa adanya
+#   - data/ (SQLite)           -> tidak pernah disentuh
+#   - profile/ (cookies)       -> tidak pernah disentuh
+#   - web/ + helper/           -> ditimpa (memang bagian rilis)
+# Yang dibuat hanya kalau BELUM ada (install baru).
 ensure_service() {
+  if [[ -f "$DIR/.env" ]]; then
+    local cur_port cur_db
+    cur_port="$(_env_port)"
+    cur_db="$(grep -E '^AP_DB=' "$DIR/.env" 2>/dev/null | cut -d= -f2-)"
+    say "config lama dipertahankan: port=${cur_port:-?} db=${cur_db:-default}"
+  fi
   if [[ ! -f "$DIR/.env" ]]; then
     cat > "$DIR/.env" <<EOF
 # infra-only (sebelum server jalan) — runtime config via web admin

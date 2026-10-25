@@ -136,6 +136,50 @@ do_restore() {
   do_status
 }
 
+# ganti port: tulis ke .env lalu restart. Ingatkan tunnel kalau ada.
+do_setport() {
+  need_root port
+  local baru="${1:-}"
+  [[ -n "$baru" ]] || die "pakai: ap port 8800"
+  [[ "$baru" =~ ^[0-9]+$ ]] || die "port harus angka"
+  local lama; lama="$(port)"
+  if [[ "$lama" == "$baru" ]]; then say "port sudah $baru"; return; fi
+  if ss -tln 2>/dev/null | grep -q ":$baru "; then
+    die "port $baru sudah dipakai proses lain — pilih port lain"
+  fi
+  cp "$DIR/.env" "$DIR/.env.bak-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+  if grep -qE '^AP_PORT=' "$DIR/.env" 2>/dev/null; then
+    sed -i "s/^AP_PORT=.*/AP_PORT=$baru/" "$DIR/.env"
+  else
+    echo "AP_PORT=$baru" >> "$DIR/.env"
+  fi
+  say "port: $lama -> $baru (.env diperbarui)"
+  systemctl restart "$SERVICE"
+  sleep 3
+  do_status
+  # tunnel cloudflared: kasih tahu kalau ingress masih menunjuk port lama
+  local cfg="/etc/cloudflared/agenpulsa.yml"
+  if [[ -f "$cfg" ]] && grep -q "127.0.0.1:$lama" "$cfg"; then
+    warn "tunnel cloudflared masih menunjuk port $lama:"
+    echo "   sed -i 's|127.0.0.1:$lama|127.0.0.1:$baru|' $cfg && systemctl restart cloudflare-agenpulsa"
+  fi
+}
+
+# tampilkan config efektif (tanpa membocorkan secret)
+do_config() {
+  local p; p="$(port)"
+  echo -e "${B}Config infra${R} ($DIR/.env)"
+  sed -E 's/(TOKEN|SECRET|PASS)=.*/\1=***/' "$DIR/.env" 2>/dev/null || echo "  (.env tidak ada)"
+  echo
+  echo -e "${B}Runtime${R} (web admin → Pengaturan)"
+  local dbp="$DIR/data/agenpulsa.db"
+  if [[ -f "$dbp" ]]; then
+    sqlite3 "$dbp" "SELECT '  '||key||' = '||CASE WHEN key LIKE '%token%' OR key LIKE '%secret%' THEN '(tersimpan)' WHEN value='' THEN '(kosong)' ELSE value END FROM settings WHERE key IN ('server_url','paypan_base_url','bot_admin_id','bot_public_chat_id','bot_public_thread_id','notif_public_status','saldo_min')" 2>/dev/null || true
+  fi
+  echo
+  echo "  web: http://$(hostname -I | awk '{print $1}'):$p/admin"
+}
+
 menu() {
   echo -e "${B}AgenPulsa Server — menu${R}"
   echo "  1) Status"
@@ -146,6 +190,8 @@ menu() {
   echo "  6) Update ke latest"
   echo "  7) Backup sekarang"
   echo "  8) Health check"
+  echo "  9) Ganti port"
+  echo " 10) Lihat config"
   echo "  0) Keluar"
   echo
   read -rp "Pilih: " c
@@ -158,6 +204,8 @@ menu() {
     6) do_update ;;
     7) do_backup ;;
     8) do_health ;;
+    9) read -rp "Port baru: " np; do_setport "$np" ;;
+    10) do_config ;;
     0|*) exit 0 ;;
   esac
 }
@@ -173,6 +221,8 @@ case "${1:-menu}" in
   version|ver) do_version ;;
   health)     do_health ;;
   backup)     do_backup ;;
+  port)       do_setport "${2:-}" ;;
+  config)     do_config ;;
   restore)    do_restore "${2:-}" ;;
   *) die "perintah tidak dikenal: $1 (pakai: ap [start|stop|restart|status|log|update|version|health|backup|restore])" ;;
 esac
