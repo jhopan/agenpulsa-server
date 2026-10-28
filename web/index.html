@@ -1000,14 +1000,16 @@ async function tesWebhook(){
       body:JSON.stringify({event:'order.paid',order:{id:'tes',price:1,code:1,total:2}})});
     const txt=(await r.text()).slice(0,140);
     if(r.status===403){
-      actionStatus('alamatStatus','Webhook hidup - HTTP 403 (signature ditolak = HMAC aktif, itu yang benar)','ok');
+      actionStatus('alamatStatus','Webhook hidup - HTTP 403 (signature ditolak = HMAC aktif, itu yang benar)','');
+    }else if(r.status===405||r.status===404){
+      actionStatus('alamatStatus','URL salah - HTTP '+r.status+' (path /webhook gak ada)',1);
     }else if(r.status===200){
-      actionStatus('alamatStatus','Webhook hidup - HTTP 200 (terbaca)','ok');
+      actionStatus('alamatStatus','Webhook hidup - HTTP 200 (terbaca)','');
     }else{
-      actionStatus('alamatStatus','HTTP '+r.status+' - '+txt,'err');
+      actionStatus('alamatStatus','HTTP '+r.status+' - '+txt,1);
     }
   }catch(e){
-    actionStatus('alamatStatus','Gagal: '+e.message,'err');
+    actionStatus('alamatStatus','Gagal: '+e.message,1);
   }
 }
 
