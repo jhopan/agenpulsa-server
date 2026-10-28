@@ -324,9 +324,11 @@ def op_order(args):
         out(False, pesan=f"respons tidak JSON: {r2.text[:150]}")
     if data.get("success"):
         oid = data.get("id")
+        # PENTING: jangan ikut harga internal isipulsa (modal) di pesan —
+        # pesan ini dikirim ke pembeli via bot, harga modal = rafel profit.
+        # Harga JUAL determination ada di sisi server (katalog harga_jual).
         out(True, sukses=True, order_id=str(oid), harga=harga, paket=nama_asli,
-            pesan=(f"{catatan}ORDER SUKSES. Paket: {nama_asli} | Harga: Rp {harga:,} | ID: {oid}"
-                   .replace(",", ".")))
+            pesan=(f"{catatan}ORDER SUKSES. Paket: {nama_asli} | ID: {oid}"))
     errors = "; ".join(data.get("errors", ["tidak diketahui"]))
     out(False, pesan=f"{catatan}ORDER GAGAL. Alasan: {errors}")
 

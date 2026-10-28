@@ -859,3 +859,87 @@ func TestTesWebhook(t *testing.T) {
 		t.Error("url webhook harus dikembalikan")
 	}
 }
+
+// TestModalTidakBocorKeClient: harga modal (harga beli isipulsa) harus
+// TIDAK keluar ke client (bot WA/TG). Admin tetap dapat order lengkap.
+func TestModalTidakBocorKeClient(t *testing.T) {
+	dir := t.TempDir()
+	store, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	_ = store.UpsertAPIKey(&db.APIKey{Key: "KCLIENT", Nama: "bot", BolehOrder: true})
+	_ = store.UpsertAPIKey(&db.APIKey{Key: "KADMIN", Nama: "admin", BolehOrder: true, BolehAdmin: true})
+
+	eng, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Close()
+
+	a := api.New(store, eng, testWebFS())
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+
+	// bikin order dengan modal 4550 (harga isipulsa) & harga jual 6500
+	o := &db.Order{
+		Ref: "r-modal", Nomor: "081234567890", Label: "Kuota Game 1GB, 30 Hari",
+		Modal: 4550, HargaJual: 6500, Status: "success",
+		Pesan: "ORDER SUKSES. Paket: Kuota Game 1GB. 30 Hari | ID: 749037171",
+		Sumber: "telegram", ClientID: "tg:111",
+	}
+	if _, err := store.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+
+	get := func(key string) map[string]any {
+		req, _ := http.NewRequest("GET", srv.URL+"/api/v1/orders/r-modal", nil)
+		if key != "" {
+			req.Header.Set("X-API-Key", key)
+		}
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		var m map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+
+	// client: TIDAK boleh ada field modal
+	mClient := get("KCLIENT")
+	if _, ada := mClient["modal"]; ada {
+		t.Error("field modal BOCOR ke client (GET /orders/{ref})")
+	}
+	if mClient["harga_jual"] != float64(6500) {
+		t.Errorf("harga_jual client salah: %v", mClient["harga_jual"])
+	}
+
+	// list order juga harus bersih untuk client
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/orders?limit=10", nil)
+	req.Header.Set("X-API-Key", "KCLIENT")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var lst []map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&lst); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range lst {
+		if _, ada := m["modal"]; ada {
+			t.Error("field modal BOCOR ke client (GET /orders)")
+		}
+	}
+
+	// admin: BOLEH dapat modal (buat laporan web)
+	mAdmin := get("KADMIN")
+	if mAdmin["modal"] != float64(4550) {
+		t.Errorf("admin harus dapat modal, dapat: %v", mAdmin["modal"])
+	}
+}

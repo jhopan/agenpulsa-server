@@ -574,9 +574,14 @@ func (a *API) createOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Idempotensi: ref sama -> balas order lama.
+	bolehModal := a.RequesterBolehLihatModal(r)
 	if req.Ref != "" {
 		if exist, _ := a.store.GetOrderByRef(req.Ref); exist != nil {
-			writeJSON(w, 200, exist)
+			if bolehModal {
+				writeJSON(w, 200, exist)
+			} else {
+				writeJSON(w, 200, orderToView(exist))
+			}
 			return
 		}
 	}
@@ -593,7 +598,11 @@ func (a *API) createOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fresh, _ := a.store.GetOrderByRef(o.Ref)
-	writeJSON(w, 202, fresh)
+	if bolehModal {
+		writeJSON(w, 202, fresh)
+	} else {
+		writeJSON(w, 202, orderToView(fresh))
+	}
 }
 
 // createPending: order status pending_payment (menunggu webhook paypan).
@@ -607,7 +616,11 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 		req.Ref = "pend-" + randomHex(8)
 	}
 	if exist, _ := a.store.GetOrderByRef(req.Ref); exist != nil {
-		writeJSON(w, 200, exist)
+		if a.RequesterBolehLihatModal(r) {
+			writeJSON(w, 200, exist)
+		} else {
+			writeJSON(w, 200, orderToView(exist))
+		}
 		return
 	}
 	o, err := a.buildOrder(req, "paypan", a.clientID(r))
@@ -651,13 +664,18 @@ func (a *API) createPending(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) getOrder(w http.ResponseWriter, r *http.Request) {
 	id, idStr := r.PathValue("id"), r.PathValue("id")
+	bolehModal := a.RequesterBolehLihatModal(r)
 	if num, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 		o, err := a.store.GetOrder(num)
 		if err != nil {
 			jsonErr(w, 404, "order tidak ada")
 			return
 		}
-		writeJSON(w, 200, o)
+		if bolehModal {
+			writeJSON(w, 200, o)
+		} else {
+			writeJSON(w, 200, orderToView(o))
+		}
 		return
 	}
 	// bukan angka = ref (mis. f10f3762d4ae459a dari bot telegram)
@@ -666,7 +684,11 @@ func (a *API) getOrder(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 404, "order tidak ada")
 		return
 	}
-	writeJSON(w, 200, o)
+	if bolehModal {
+		writeJSON(w, 200, o)
+	} else {
+		writeJSON(w, 200, orderToView(o))
+	}
 }
 
 // hapusHistory: bersihkan order history (admin). Query:
@@ -713,7 +735,12 @@ func (a *API) listOrders(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	writeJSON(w, 200, orders)
+	// Client (bot) cuma dapat view tanpa modal — harga modal = rafel profit.
+	if a.RequesterBolehLihatModal(r) {
+		writeJSON(w, 200, orders)
+		return
+	}
+	writeJSON(w, 200, ordersToViews(orders))
 }
 
 func (a *API) status(w http.ResponseWriter, r *http.Request) {
