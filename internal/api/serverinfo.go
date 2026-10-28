@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -26,14 +27,17 @@ type serverInfo struct {
 	Same      bool   `json:"same"`       // true kalau public URL == LAN URL
 }
 
-// deteksiLANIP: IP IPv4 non-loopback yang paling "ijdiah" (private LAN).
-// Prioritas: 192.168.x, lalu 10.x, lalu 172.16-31.x. Loopback & link-local
-// (169.254.x) dilewati — bukan jalur LAN yang kepakai.
+// deteksiLANIP: IP IPv4 yang paling "ijdiah" (private LAN).
+// Prioritas: interface yang punya DEFAULT ROUTE (jalur keluar internet) —
+// itu interface yang dipakai server & paling stabil diakses dari jaringan.
+// Fallback: 192.168.x, lalu 10.x, lalu 172.16-31.x.
+// Loopback & link-local (169.254.x) dilewati.
 func deteksiLANIP() string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
+	ipByIface := map[string]string{}
 	var kandidat []string
 	for _, ifc := range ifaces {
 		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
@@ -53,11 +57,21 @@ func deteksiLANIP() string {
 				continue // link-local
 			}
 			kandidat = append(kandidat, ip)
+			if _, ada := ipByIface[ifc.Name]; !ada {
+				ipByIface[ifc.Name] = ip
+			}
 		}
 	}
 	if len(kandidat) == 0 {
 		return ""
 	}
+	// 1) interface dengan default route (Linux: /proc/net/route)
+	if ifc := ifaceDefaultRoute(); ifc != "" {
+		if ip, ok := ipByIface[ifc]; ok {
+			return ip
+		}
+	}
+	// 2) fallback: skor private range
 	skor := func(ip string) int {
 		switch {
 		case strings.HasPrefix(ip, "192.168."):
@@ -77,6 +91,35 @@ func deteksiLANIP() string {
 		}
 	}
 	return best
+}
+
+// ifaceDefaultRoute: nama interface yang jadi default route.
+// Linux: baca /proc/net/route (kolom: iface destination gateway ... flag),
+// default route = destination 00000000. Non-Linux: "" (fallback lain).
+func ifaceDefaultRoute() string {
+	data, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		return ""
+	}
+	bestIface := ""
+	bestMetric := ^uint64(0)
+	for _, line := range strings.Split(string(data), "\n")[1:] {
+		f := strings.Fields(line)
+		if len(f) < 8 {
+			continue
+		}
+		if f[1] != "00000000" { // bukan default route
+			continue
+		}
+		var metric uint64
+		if m, err := strconv.ParseUint(f[6], 16, 64); err == nil {
+			metric = m
+		}
+		if metric < bestMetric {
+			bestMetric, bestIface = metric, f[0]
+		}
+	}
+	return bestIface
 }
 
 // portServer: port dari env AP_PORT (default 8081) — sama kayak main.go.
