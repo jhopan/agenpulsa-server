@@ -20,7 +20,8 @@ import (
 type serverInfo struct {
 	LANURL    string `json:"lan_url"`     // URL LAN (isi manual kalau auto-detect salah)
 	PublicURL string `json:"public_url"`  // URL publik / CF tunnel
-	Webhook   string `json:"webhook_url"` // URL + /webhook (paypan)
+	Webhook   string `json:"webhook_url"`     // URL publik + /webhook (paypan dari luar)
+	WebhookLAN string `json:"webhook_url_lan"` // URL LAN + /webhook (paypan di jaringan lokal)
 	Port      string `json:"port"`
 	Host      string `json:"host"`      // host CF tunnel (dari public URL)
 	Detected  string `json:"detected_lan"` // IP LAN yang terdeteksi otomatis
@@ -157,13 +158,18 @@ func (a *API) serverInfoPayload() serverInfo {
 		Detected:  deteksi,
 		Same:      lan != "" && lan == pub,
 	}
+	// Webhook: dua-duanya. LAN buat Paypan yg jalan di jaringan lokal (cepat),
+	// publik (tunnel) buat Paypan di luar jaringan / cloud.
+	if lan != "" {
+		info.WebhookLAN = lan + "/webhook"
+	}
 	if pub != "" {
 		info.Webhook = pub + "/webhook"
 		// host CF tunnel untuk info tunnel (mis. agenpulsa.jhopan.my.id)
 		trim := strings.TrimPrefix(strings.TrimPrefix(pub, "https://"), "http://")
 		info.Host = strings.Split(trim, "/")[0]
 	} else if lan != "" {
-		info.Webhook = lan + "/webhook"
+		info.Webhook = info.WebhookLAN
 	}
 	return info
 }

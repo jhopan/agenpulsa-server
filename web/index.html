@@ -370,8 +370,16 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div class="alamat-info"><span class="alamat-label">🔗 Base URL API (semua endpoint)</span><code id="aBase">—</code></div>
 <button class="sec" type="button" onclick="copyVal('aBase','Base URL API')">📋</button>
 </div>
+<div class="alamat-row">
+<div class="alamat-info"><span class="alamat-label">🔗 Base URL API LAN (endpoint lokal — lebih cepat)</span><code id="aBaseLan">—</code></div>
+<button class="sec" type="button" onclick="copyVal('aBaseLan','Base URL LAN')">📋</button>
+</div>
 <div class="alamat-row highlight">
-<div class="alamat-info"><span class="alamat-label">🪝 Webhook URL <b>(wajib publik — buat Paypan)</b></span><code id="aWebhook">—</code></div>
+<div class="alamat-info"><span class="alamat-label">🪝 Webhook URL LAN <b>(Paypan di jaringan lokal — cepat)</b></span><code id="aWebhookLan">—</code></div>
+<button class="sec" type="button" onclick="copyVal('aWebhookLan','Webhook LAN')">📋</button>
+</div>
+<div class="alamat-row highlight">
+<div class="alamat-info"><span class="alamat-label">🪝 Webhook URL PUBLIK <b>(Paypan di luar jaringan / cloud)</b></span><code id="aWebhook">—</code></div>
 <button class="sec" type="button" onclick="copyVal('aWebhook','Webhook URL')">📋</button>
 </div>
 </div>
@@ -933,7 +941,9 @@ async function isiAlamatCard(){
     $('aLan').textContent=lan||'(tidak terdeteksi)';
     $('aTunnel').textContent=tun||'(belum diisi)';
     $('aBase').textContent=base||'(belum diisi)';
-    $('aWebhook').textContent=base?(base+'/webhook'):'(belum diisi)';
+    $('aBaseLan').textContent=lan||'(tidak terdeteksi)';
+    $('aWebhook').textContent=i.webhook_url||(base?(base+'/webhook'):'(belum diisi)');
+    $('aWebhookLan').textContent=i.webhook_url_lan||(lan?(lan+'/webhook'):'(tidak terdeteksi)');
   }catch(e){}
 }
 // copyVal: copy isi elemen by id.
@@ -953,10 +963,12 @@ async function salinSemuaAlamat(){
   const blok=[
     '# AGENPULSA - ALAMAT SERVER',
     '',
-    'Base URL API   : '+$('aBase').textContent.trim(),
-    'URL LAN        : '+$('aLan').textContent.trim(),
-    'URL Tunnel     : '+$('aTunnel').textContent.trim(),
-    'Webhook (Paypan): '+$('aWebhook').textContent.trim()
+    'Base URL API    : '+$('aBase').textContent.trim(),
+    'Base URL LAN    : '+$('aBaseLan').textContent.trim(),
+    'URL LAN         : '+$('aLan').textContent.trim(),
+    'URL Tunnel      : '+$('aTunnel').textContent.trim(),
+    'Webhook LAN     : '+$('aWebhookLan').textContent.trim(),
+    'Webhook PUBLIK  : '+$('aWebhook').textContent.trim()
   ].join('\n');
   try{await navigator.clipboard.writeText(blok);flash('Semua alamat dicopy ke clipboard')}
   catch(e){prompt('Copy manual:',blok)}
@@ -983,7 +995,9 @@ async function salinCurlContoh(){
     `  -d '{"catalog_id":1,"nomor":"081234567890"}'`,
     '',
     '# GET status order',
-    `curl -H '${hdr}' '${base}/api/v1/orders/1'`
+    `curl -H '${hdr}' '${base}/api/v1/orders/1'`,
+    '',
+    '# (kalau Paypan/client jalan di JARINGAN LOKAL, ganti base ke URL LAN di atas)'
   ].join('\n');
   try{await navigator.clipboard.writeText(contoh);flash('Contoh curl dicopy ke clipboard')}
   catch(e){prompt('Copy manual:',contoh)}
@@ -991,26 +1005,26 @@ async function salinCurlContoh(){
 // tesWebhook: panggil webhook dengan signature salah buat cek URL hidup.
 // Hasil 403 = URL benar & HMAC aktif (itu healthy state).
 async function tesWebhook(){
-  const el=$('aWebhook');
-  const url=el?el.textContent.trim():'';
-  if(!url||url==='—'){flash('Webhook URL belum diisi',1);return}
-  actionStatus('alamatStatus','Menguji '+url+' ...');
-  try{
-    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({event:'order.paid',order:{id:'tes',price:1,code:1,total:2}})});
-    const txt=(await r.text()).slice(0,140);
-    if(r.status===403){
-      actionStatus('alamatStatus','Webhook hidup - HTTP 403 (signature ditolak = HMAC aktif, itu yang benar)','');
-    }else if(r.status===405||r.status===404){
-      actionStatus('alamatStatus','URL salah - HTTP '+r.status+' (path /webhook gak ada)',1);
-    }else if(r.status===200){
-      actionStatus('alamatStatus','Webhook hidup - HTTP 200 (terbaca)','');
-    }else{
-      actionStatus('alamatStatus','HTTP '+r.status+' - '+txt,1);
-    }
-  }catch(e){
-    actionStatus('alamatStatus','Gagal: '+e.message,1);
+  const targets=[['LAN',$('aWebhookLan')],['PUBLIK',$('aWebhook')]];
+  const hasil=[];
+  for(const [nama,el] of targets){
+    if(!el)continue;
+    const url=el.textContent.trim();
+    if(!url||url==='—'||url==='(tidak terdeteksi)'){hasil.push(nama+': belum diisi');continue}
+    actionStatus('alamatStatus','Menguji webhook '+nama+' ...');
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({event:'order.paid',order:{id:'tes',price:1,code:1,total:2}})});
+      const txt=(await r.text()).slice(0,90);
+      if(r.status===403)hasil.push(nama+' hidup (403 = HMAC aktif)');
+      else if(r.status===404||r.status===405)hasil.push(nama+' URL salah (HTTP '+r.status+')');
+      else if(r.status===200)hasil.push(nama+' hidup (200)');
+      else hasil.push(nama+' HTTP '+r.status+' '+txt);
+    }catch(e){hasil.push(nama+' gagal: '+e.message)}
   }
+  if(!hasil.length){actionStatus('alamatStatus','Belum ada alamat webhook',1);return}
+  const semuaBaik=hasil.every(h=>h.includes('hidup'));
+  actionStatus('alamatStatus',hasil.join('  |  ')+(semuaBaik?'':'  (ada yang bermasalah)'),semuaBaik?'':1);
 }
 
 async function simpanSet(){

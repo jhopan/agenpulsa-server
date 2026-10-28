@@ -784,8 +784,9 @@ func TestServerInfo(t *testing.T) {
 	var out struct {
 		LANURL    string `json:"lan_url"`
 		PublicURL string `json:"public_url"`
-		Webhook   string `json:"webhook_url"`
-		Port      string `json:"port"`
+		Webhook    string `json:"webhook_url"`
+		WebhookLAN string `json:"webhook_url_lan"`
+		Port       string `json:"port"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&out); err != nil {
 		t.Fatal(err)
@@ -798,6 +799,9 @@ func TestServerInfo(t *testing.T) {
 	}
 	if out.Webhook != "https://agenpulsa.jhopan.my.id/webhook" {
 		t.Errorf("webhook_url salah: %q", out.Webhook)
+	}
+	if out.WebhookLAN != "http://192.168.10.21:8800/webhook" {
+		t.Errorf("webhook_url_lan salah: %q", out.WebhookLAN)
 	}
 	if out.Port == "" {
 		t.Error("port harus kebaca dari env/default")
