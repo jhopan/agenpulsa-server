@@ -219,6 +219,19 @@ Yang ditimpa hanya `web/`, `helper/`, dan binary. Backup binary disisakan 3
 terbaru (sisanya dipangkas otomatis). Saat update, script melaporkan
 config lama yang dipertahankan (port + path DB).
 
+**Dua jalur akses (LAN vs CF tunnel)** — server sama, cuma alamat berbeda:
+
+| Jalur | Alamat production | Pakai buat |
+|---|---|---|
+| **LAN** | `http://192.168.10.21:8800` | bot/klien di jaringan lokal (≈34 ms) |
+| **Tunnel** | `https://agenpulsa.jhopan.my.id` | webhook paypan + client luar (≈539 ms) |
+
+- Di web admin → Pengaturan → Integrasi ada 3 field: **URL LAN**, **URL CF Tunnel**, **URL server (umum)**.
+- Tombol **🔍 Isi otomatis** isi LAN (auto-detect IP) + tunnel. IP dideteksi dari interface yang punya **default route** (`/proc/net/route`), bukan asal private range — server punya 2 NIC (wlan0 `.21` + wifi-usb `.186`).
+- Endpoint `GET /api/v1/server-info` (API key) → `{lan_url, public_url, webhook_url, port, detected_lan}`.
+- Setting DB: `server_url_lan`, `server_url_tunnel`, `server_url` (fallback).
+- Bot WA/TG di LAN diarahkan ke URL LAN; webhook paypan tetap ke tunnel (wajib publik).
+
 **Port produksi debian = `8800`** (bukan 8081/8082). Kalau ganti port, tiga
 tempat harus sinkron:
 1. `/opt/agenpulsa/.env` → `AP_PORT` (bisa via `ap port <n>`)

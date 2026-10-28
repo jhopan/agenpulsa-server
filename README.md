@@ -68,6 +68,37 @@ ap config          # lihat config efektif (tanpa secret)
 ap topic           # deteksi chat_id + message_thread_id otomatis
 ```
 
+### Dua jalur akses: LAN & Cloudflare Tunnel
+
+Server yang sama dilayani lewat 2 alamat — pilih sesuai kebutuhan (LAN jauh lebih cepat):
+
+| Jalur | Alamat production | Latensi | Pakai buat |
+|---|---|---|---|
+| **LAN** | `http://192.168.10.21:8800` | ~34 ms | bot/klien di jaringan lokal |
+| **Tunnel** | `https://agenpulsa.jhopan.my.id` | ~539 ms | webhook paypan, client di luar jaringan |
+
+**Di web admin → Pengaturan → Integrasi:**
+- **URL LAN** — untuk bot/klien lokal (auto-detect IP, bisa diedit manual)
+- **URL CF Tunnel** — untuk webhook paypan
+- **URL server (umum)** — fallback untuk client lain
+
+Tombol **🔍 Isi otomatis** mengisi keduanya dari server. **📋 Salin semua alamat** menyalin ringkasan ke clipboard.
+
+Cek via API (butuh API key):
+
+```bash
+curl -H "X-API-Key: KEY" http://192.168.10.21:8800/api/v1/server-info
+```
+```json
+{
+  "lan_url": "http://192.168.10.21:8800",
+  "public_url": "https://agenpulsa.jhopan.my.id",
+  "webhook_url": "https://agenpulsa.jhopan.my.id/webhook",
+  "port": "8800",
+  "detected_lan": "192.168.10.21"
+}
+```
+
 ### Cara ambil `chat_id` + `message_thread_id` (supergrup/topik)
 
 `getUpdates` sering kosong karena bot belum pernah menerima pesan. Pakai:
