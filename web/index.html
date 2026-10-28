@@ -37,6 +37,14 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 .tab{display:none}.tab.on{display:block}.kv{display:flex;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid #e8edf3;font-size:14px}.kv b{color:var(--ink)}.btnrow{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.btnrow button{flex:1;min-width:150px}
 @media(max-width:900px){.sidebar{transform:translateX(-100%);transition:transform .18s ease;box-shadow:8px 0 24px rgba(20,33,61,.2)}.sidebar.open{transform:translateX(0)}.main{margin-left:0}.menu-toggle{display:inline-flex;align-items:center;justify-content:center}.nav-scrim.open{display:block;position:fixed;inset:0;background:rgba(20,33,61,.4);z-index:15}.content{padding:0 20px 32px}header{padding:13px 20px;gap:12px}header .right{margin-left:auto}}
 @media(max-width:700px){.grid2{grid-template-columns:1fr}.content{margin:20px auto;padding:0 14px 28px}.card{padding:16px;border-radius:12px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat{padding:14px}.stat .n{font-size:20px}header h1{font-size:18px}header .who{display:none}.btnrow button{min-width:0}.attention-item{flex-direction:column;gap:5px}.attention-item small{text-align:left}table{display:block;overflow:visible}table tr{display:block;border:1px solid var(--line);border-radius:10px;margin:10px 0;padding:8px;background:#fff}table tr:first-child{display:none}table td{display:flex;justify-content:space-between;gap:12px;border:0;padding:7px 3px;text-align:right}table td::before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:700;text-align:left}table td.empty{display:block;text-align:center}table td.empty::before{display:none}.money{justify-content:space-between}.kv{align-items:flex-start;flex-direction:column;gap:3px}}
+
+/* ===== Alamat server & webhook (copy per-baris) ===== */
+.alamat-list{display:flex;flex-direction:column;gap:8px}
+.alamat-row{display:flex;gap:8px;align-items:center;background:#f7f8f7;border:1px solid #e4e7e4;border-radius:10px;padding:10px 12px}
+.alamat-row.highlight{background:#eefaf1;border-color:#b6e3c4}
+.alamat-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.alamat-label{font-size:12px;color:#5b6b5f;font-weight:600}
+.alamat-row code{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;color:#1f2a22;background:#fff;border:1px solid #e4e7e4;border-radius:6px;padding:6px 8px}
 </style>
 </head>
 <body>
@@ -343,13 +351,38 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div><label>Ulang notif saldo tiap (jam)</label><input id="sSaldoNotifJam" type="number" min="1" max="72" step="1" style="width:100%" placeholder="1"></div>
 <div></div>
 </div>
-<div class="grid2">
-<div><label>Webhook URL agenpulsa</label><button class="sec" type="button" onclick="bukaDialog('webhookGuide')">Panduan Webhook</button>
-<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-<input id="sWebhook" style="width:100%;font-family:monospace;font-size:12px" disabled>
-<button class="sec" style="width:auto;white-space:nowrap" onclick="copyWebhook()">📋 Copy</button>
-<button class="sec" style="width:auto;white-space:nowrap" onclick="editWebhook()">✏️ Edit URL server</button>
-</div></div>
+</div>
+<div class="card">
+<h2>Alamat Server &amp; Webhook <span class="badge">salin sekali klik</span></h2>
+<p><small>Semua alamat server dalam 1 tempat. Tiap baris punya tombol <b>📋</b> — buat webhook paypan, base URL API, dan client bot (WA/TG).</small></p>
+
+<input type="hidden" id="sWebhook">
+<div class="alamat-list">
+<div class="alamat-row">
+<div class="alamat-info"><span class="alamat-label">🌐 URL LAN (bot/klien lokal — cepat)</span><code id="aLan">—</code></div>
+<button class="sec" type="button" onclick="copyVal('aLan','URL LAN')">📋</button>
+</div>
+<div class="alamat-row">
+<div class="alamat-info"><span class="alamat-label">🌍 URL CF Tunnel (publik)</span><code id="aTunnel">—</code></div>
+<button class="sec" type="button" onclick="copyVal('aTunnel','URL Tunnel')">📋</button>
+</div>
+<div class="alamat-row">
+<div class="alamat-info"><span class="alamat-label">🔗 Base URL API (semua endpoint)</span><code id="aBase">—</code></div>
+<button class="sec" type="button" onclick="copyVal('aBase','Base URL API')">📋</button>
+</div>
+<div class="alamat-row highlight">
+<div class="alamat-info"><span class="alamat-label">🪝 Webhook URL <b>(wajib publik — buat Paypan)</b></span><code id="aWebhook">—</code></div>
+<button class="sec" type="button" onclick="copyVal('aWebhook','Webhook URL')">📋</button>
+</div>
+</div>
+
+<div class="btnrow" style="margin-top:12px">
+<button class="sec" type="button" onclick="salinSemuaAlamat()">📋 Salin semua alamat</button>
+<button class="sec" type="button" onclick="salinCurlContoh()">📋 Salin contoh curl</button>
+<button class="sec" type="button" onclick="tesWebhook()">🔔 Tes webhook</button>
+<button class="sec" type="button" onclick="bukaDialog('webhookGuide')">📖 Panduan Webhook</button>
+</div>
+<div id="alamatStatus" class="action-status"></div>
 </div>
 <div class="btnrow">
 <button class="sec" onclick="tesBot()">🔔 Tes Notif</button>
@@ -431,6 +464,7 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 </ol></div>
 </dialog>
 <script>
+const PLACEHOLDER_KEY='<API_KEY_ANDA>';
 const rp=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
@@ -827,7 +861,8 @@ async function loadSet(){
     $('sSheetToken').value=s.sheet_backup_token||'';
     // webhook URL = URL publik (tunnel) + /webhook (dipakai paypan)
     const pubUrl=(s.server_url_tunnel||s.server_url||window.location.origin).replace(/\/+$/,'');
-    $('sWebhook').value=pubUrl+'/webhook';
+    if($('sWebhook'))$('sWebhook').value=pubUrl+'/webhook';
+    isiAlamatCard();
     // token gak dibalikin (sensitif) - placeholder saja kalau sudah diset
     $('sBotToken').value=s.bot_tg_token||'';
     $('sBotToken').placeholder='1234567890:AAxxxx...';
@@ -887,6 +922,95 @@ async function salinAlamat(){
   }
 }
 
+// ---------- Alamat server & webhook (card copy) ----------
+// Ambil info alamat dari server (auto-detect LAN) + setting tunnel.
+async function isiAlamatCard(){
+  try{
+    const i=await api('/api/v1/server-info');
+    const lan=i.lan_url||'';
+    const tun=i.public_url||'';
+    const base=tun||lan;
+    $('aLan').textContent=lan||'(tidak terdeteksi)';
+    $('aTunnel').textContent=tun||'(belum diisi)';
+    $('aBase').textContent=base||'(belum diisi)';
+    $('aWebhook').textContent=base?(base+'/webhook'):'(belum diisi)';
+  }catch(e){}
+}
+// copyVal: copy isi elemen by id.
+async function copyVal(id,nama){
+  const el=$(id); if(!el)return;
+  const v=el.textContent.trim();
+  if(!v||v==='—'||v==='(belum diisi)'||v==='(tidak terdeteksi)'){flash(nama+' belum diisi',1);return}
+  try{await navigator.clipboard.writeText(v);flash(nama+' dicopy: '+v)}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=v;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');flash(nama+' dicopy: '+v)}catch(e2){prompt('Copy manual:',v)}
+    ta.remove();
+  }
+}
+// salinSemuaAlamat: semua alamat sekaligus buat dipaste ke dokumentasi/client.
+async function salinSemuaAlamat(){
+  const blok=[
+    '# AGENPULSA - ALAMAT SERVER',
+    '',
+    'Base URL API   : '+$('aBase').textContent.trim(),
+    'URL LAN        : '+$('aLan').textContent.trim(),
+    'URL Tunnel     : '+$('aTunnel').textContent.trim(),
+    'Webhook (Paypan): '+$('aWebhook').textContent.trim()
+  ].join('\n');
+  try{await navigator.clipboard.writeText(blok);flash('Semua alamat dicopy ke clipboard')}
+  catch(e){prompt('Copy manual:',blok)}
+}
+// salinCurlContoh: contoh curl panggil API (buat dev client bot).
+async function salinCurlContoh(){
+  const base=$('aBase').textContent.trim();
+  if(!base||base==='—'){flash('Base URL belum diisi',1);return}
+  const hdr='X-API-Key: '+PLACEHOLDER_KEY;
+  const B=String.fromCharCode(92);
+  const contoh=[
+    '# GET katalog',
+    `curl -H '${hdr}' ${B}`,
+    `  '${base}/api/v1/catalog'`,
+    '',
+    '# POST order (langsung, antri)',
+    `curl -X POST '${base}/api/v1/orders' ${B}`,
+    `  -H '${hdr}' -H 'Content-Type: application/json' ${B}`,
+    `  -d '{"catalog_id":1,"nomor":"081234567890","ref":"wa-628123-1"}'`,
+    '',
+    '# POST order pending payment (QRIS Paypan)',
+    `curl -X POST '${base}/api/v1/orders/pending' ${B}`,
+    `  -H '${hdr}' -H 'Content-Type: application/json' ${B}`,
+    `  -d '{"catalog_id":1,"nomor":"081234567890"}'`,
+    '',
+    '# GET status order',
+    `curl -H '${hdr}' '${base}/api/v1/orders/1'`
+  ].join('\n');
+  try{await navigator.clipboard.writeText(contoh);flash('Contoh curl dicopy ke clipboard')}
+  catch(e){prompt('Copy manual:',contoh)}
+}
+// tesWebhook: panggil webhook dengan signature salah buat cek URL hidup.
+// Hasil 403 = URL benar & HMAC aktif (itu healthy state).
+async function tesWebhook(){
+  const el=$('aWebhook');
+  const url=el?el.textContent.trim():'';
+  if(!url||url==='—'){flash('Webhook URL belum diisi',1);return}
+  actionStatus('alamatStatus','Menguji '+url+' ...');
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({event:'order.paid',order:{id:'tes',price:1,code:1,total:2}})});
+    const txt=(await r.text()).slice(0,140);
+    if(r.status===403){
+      actionStatus('alamatStatus','Webhook hidup - HTTP 403 (signature ditolak = HMAC aktif, itu yang benar)','ok');
+    }else if(r.status===200){
+      actionStatus('alamatStatus','Webhook hidup - HTTP 200 (terbaca)','ok');
+    }else{
+      actionStatus('alamatStatus','HTTP '+r.status+' - '+txt,'err');
+    }
+  }catch(e){
+    actionStatus('alamatStatus','Gagal: '+e.message,'err');
+  }
+}
+
 async function simpanSet(){
   const btn=$('settingsSaveButton'),status=$('settingsSaveStatus');
   const setStatus=(msg,kind)=>{status.textContent=msg;status.className='save-status '+kind};
@@ -928,17 +1052,20 @@ async function tesBot(){
   }catch(e){flash(e.message,1)}
 }
 function copyWebhook(){
-  const v=$('sWebhook').value;
+  const el=$('aWebhook');
+  if(el)return copyVal('aWebhook','Webhook URL');
+  const v=$('sWebhook')&&$('sWebhook').value;
   if(!v)return;
   navigator.clipboard.writeText(v).then(()=>flash('Webhook URL dicopy: '+v))
     .catch(()=>{prompt('Copy manual:',v)});
 }
 function editWebhook(){
-  // lompat ke kartu Integrasi + fokus kolom URL server
+  // lompat ke kartu Integrasi + fokus kolom URL tunnel
   show('set');
-  $('sUrl').scrollIntoView({behavior:'smooth',block:'center'});
-  $('sUrl').focus();
-  flash('Edit URL server di kolom atas (mis. https://agenpulsa.jhopan.my.id) lalu 💾 Simpan Pengaturan.');
+  const el=$('sUrlTunnel')||$('sUrl');
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  el.focus();
+  flash('Edit URL tunnel (mis. https://agenpulsa.jhopan.my.id) lalu 💾 Simpan Pengaturan.');
 }
 $('logout').onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/'};
 loadStatus();loadReport();loadOrders();loadCatalog();loadHealth();
