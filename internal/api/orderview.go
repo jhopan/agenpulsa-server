@@ -2,9 +2,29 @@ package api
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
+
+// hargaDalamPesan: pola "Harga: Rp 4.550" yg nyisip di pesan order.
+// Ini harga MODAL (harga beli isipulsa) — JANGAN keluar ke client.
+var hargaDalamPesan = regexp.MustCompile(`(?i)\|?\s*Harga\s*:?\s*Rp\s*[\d.,]+`)
+var pipeBersih = regexp.MustCompile(`\s*\|\s*\|\s*|\s*\|\s*$`)
+
+// bersihkanPesanOrder: buang harga dari pesan order (defensif, buat order lama
+// yang pesannya masih nyimpan harga modal). Dipakai di view client.
+func bersihkanPesanOrder(pesan string) string {
+	if pesan == "" {
+		return ""
+	}
+	out := hargaDalamPesan.ReplaceAllString(pesan, "")
+	out = pipeBersih.ReplaceAllString(out, "| ")
+	out = strings.TrimSpace(out)
+	out = strings.TrimSuffix(out, "|")
+	return strings.TrimSpace(out)
+}
 
 // orderView: Order yang dikirim ke CLIENT (bot WA/Telegram).
 //
@@ -39,7 +59,7 @@ func orderToView(o *db.Order) orderView {
 		HargaJual:   o.HargaJual,
 		Status:      o.Status,
 		OrderIDIsip: o.OrderIDIsip,
-		Pesan:       o.Pesan,
+		Pesan:       bersihkanPesanOrder(o.Pesan),
 		InvoiceID:   o.InvoiceID,
 		ClientID:    o.ClientID,
 		ChatID:      o.ChatID,

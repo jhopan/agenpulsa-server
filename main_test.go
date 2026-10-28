@@ -943,3 +943,58 @@ func TestModalTidakBocorKeClient(t *testing.T) {
 		t.Errorf("admin harus dapat modal, dapat: %v", mAdmin["modal"])
 	}
 }
+
+// TestPesanOrderBersihHarga: pesan order lama yg nyisipin harga modal
+// harus dibersihkan di view client (defensif, order lama udah ke-simpan).
+func TestPesanOrderBersihHarga(t *testing.T) {
+	dir := t.TempDir()
+	store, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	_ = store.UpsertAPIKey(&db.APIKey{Key: "KCLIENT", Nama: "bot", BolehOrder: true})
+
+	eng, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Close()
+
+	a := api.New(store, eng, testWebFS())
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+
+	o := &db.Order{
+		Ref: "r-pesan", Nomor: "081234567890", Label: "Kuota Game 1GB, 30 Hari",
+		Modal: 4550, HargaJual: 6500, Status: "success",
+		Pesan:   "ORDER SUKSES. Paket: Kuota Game 1GB. 30 Hari | Harga: Rp 4.550 | ID: 749037171",
+		Sumber:  "telegram",
+		ClientID: "tg:111",
+	}
+	if _, err := store.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/orders/r-pesan", nil)
+	req.Header.Set("X-API-Key", "KCLIENT")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	var m map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+		t.Fatal(err)
+	}
+	pesan, _ := m["pesan"].(string)
+	if strings.Contains(pesan, "4.550") {
+		t.Errorf("harga modal masih bocor di pesan: %q", pesan)
+	}
+	if strings.Contains(pesan, "Harga") {
+		t.Errorf("kata 'Harga' harus dibuang dari pesan: %q", pesan)
+	}
+	if !strings.Contains(pesan, "ID: 749037171") {
+		t.Errorf("bagian penting pesan harus kept: %q", pesan)
+	}
+}
