@@ -1005,25 +1005,17 @@ async function salinCurlContoh(){
 // tesWebhook: panggil webhook dengan signature salah buat cek URL hidup.
 // Hasil 403 = URL benar & HMAC aktif (itu healthy state).
 async function tesWebhook(){
-  const targets=[['LAN',$('aWebhookLan')],['PUBLIK',$('aWebhook')]];
+  actionStatus('alamatStatus','Menguji webhook LAN + PUBLIK ...');
   const hasil=[];
-  for(const [nama,el] of targets){
-    if(!el)continue;
-    const url=el.textContent.trim();
-    if(!url||url==='—'||url==='(tidak terdeteksi)'){hasil.push(nama+': belum diisi');continue}
-    actionStatus('alamatStatus','Menguji webhook '+nama+' ...');
+  let semuaBaik=true;
+  for(const target of ['lan','publik']){
     try{
-      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({event:'order.paid',order:{id:'tes',price:1,code:1,total:2}})});
-      const txt=(await r.text()).slice(0,90);
-      if(r.status===403)hasil.push(nama+' hidup (403 = HMAC aktif)');
-      else if(r.status===404||r.status===405)hasil.push(nama+' URL salah (HTTP '+r.status+')');
-      else if(r.status===200)hasil.push(nama+' hidup (200)');
-      else hasil.push(nama+' HTTP '+r.status+' '+txt);
-    }catch(e){hasil.push(nama+' gagal: '+e.message)}
+      const r=await api('/api/v1/tes-webhook',{method:'POST',body:JSON.stringify({target})});
+      const ok=r.ok;
+      if(!ok)semuaBaik=false;
+      hasil.push((target==='lan'?'LAN':'PUBLIK')+' '+(ok?'hidup (HTTP '+r.http_status+' = HMAC aktif)':'HTTP '+r.http_status+' '+(r.body||'')));
+    }catch(e){semuaBaik=false;hasil.push((target==='lan'?'LAN':'PUBLIK')+' gagal: '+e.message)}
   }
-  if(!hasil.length){actionStatus('alamatStatus','Belum ada alamat webhook',1);return}
-  const semuaBaik=hasil.every(h=>h.includes('hidup'));
   actionStatus('alamatStatus',hasil.join('  |  ')+(semuaBaik?'':'  (ada yang bermasalah)'),semuaBaik?'':1);
 }
 

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -177,4 +179,48 @@ func (a *API) serverInfoPayload() serverInfo {
 // handleServerInfo: GET /api/v1/server-info (admin) — alamat LAN & publik.
 func (a *API) handleServerInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, a.serverInfoPayload())
+}
+
+// handleTesWebhook: POST /api/v1/tes-webhook — server yang memanggil webhook
+// (bukan browser). alasan: browser di halaman HTTPS gak boleh fetch ke
+// http://LAN (mixed content), jadi tes harus lewat server.
+//
+// Body: {"target":"lan"|"publik"} — server pilih URL dari serverInfoPayload
+// (allowlist internal, bukan URL bebas) lalu POST signature palsu.
+// Hasil 403 = webhook hidup & HMAC aktif (itu healthy state).
+func (a *API) handleTesWebhook(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Target string `json:"target"` // "lan" | "publik"
+	}
+	_ = json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req)
+
+	info := a.serverInfoPayload()
+	var url string
+	switch req.Target {
+	case "lan":
+		url = info.WebhookLAN
+	case "publik":
+		url = info.Webhook
+	default:
+		url = info.Webhook
+	}
+	if url == "" {
+		writeJSON(w, 400, map[string]string{"error": "alamat webhook belum diisi"})
+		return
+	}
+	payload := `{"event":"order.paid","order":{"id":"tes","price":1,"code":1,"total":2}}`
+	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	if err != nil {
+		writeJSON(w, 502, map[string]any{"ok": false, "target": req.Target, "url": url, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	writeJSON(w, 200, map[string]any{
+		"ok":         resp.StatusCode == 200 || resp.StatusCode == 403,
+		"target":     req.Target,
+		"url":        url,
+		"http_status": resp.StatusCode,
+		"body":       strings.TrimSpace(string(body)),
+	})
 }

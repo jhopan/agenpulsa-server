@@ -807,3 +807,55 @@ func TestServerInfo(t *testing.T) {
 		t.Error("port harus kebaca dari env/default")
 	}
 }
+
+// TestTesWebhook: endpoint tes webhook (server-side, dodobel mixed content).
+func TestTesWebhook(t *testing.T) {
+	dir := t.TempDir()
+	store, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	_ = store.UpsertAPIKey(&db.APIKey{Key: "K1", Nama: "c1", BolehOrder: true, BolehAdmin: true})
+	_ = store.SetSetting("paypan_secret", "s3cret")
+	_ = store.SetSetting("server_url", "https://agenpulsa.jhopan.my.id")
+
+	eng, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Close()
+
+	a := api.New(store, eng, testWebFS())
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+
+	// tanpa key -> 401
+	r0, _ := http.Post(srv.URL+"/api/v1/tes-webhook", "application/json",
+		strings.NewReader(`{"target":"publik"}`))
+	if r0.StatusCode != 401 {
+		t.Errorf("tes-webhook tanpa key harus 401, got %d", r0.StatusCode)
+	}
+
+	// dengan key -> server memanggil webhook sendiri (public URL gak nyampe dari
+	// sandbox, jadi yang penting bukan 500 dan body berisi http_status).
+	req, _ := http.NewRequest("POST", srv.URL+"/api/v1/tes-webhook",
+		strings.NewReader(`{"target":"publik"}`))
+	req.Header.Set("X-API-Key", "K1")
+	req.Header.Set("Content-Type", "application/json")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	if r.StatusCode != 200 && r.StatusCode != 502 {
+		t.Fatalf("tes-webhook harus 200/502, got %d", r.StatusCode)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out["url"] == nil || out["url"] == "" {
+		t.Error("url webhook harus dikembalikan")
+	}
+}

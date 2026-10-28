@@ -354,6 +354,8 @@ func (a *API) Routes() http.Handler {
 	// auth(false) = API key apa pun boleh (cuma URL, bukan secret) — bot perlu
 	// buat cek alamat tanpa punya izin admin.
 	mux.HandleFunc("GET /api/v1/server-info", a.auth(false, a.handleServerInfo))
+	// Tes webhook: server yang memanggil (browser HTTPS gak boleh mixed content).
+	mux.HandleFunc("POST /api/v1/tes-webhook", a.auth(true, a.handleTesWebhook))
 	mux.HandleFunc("GET /api/v1/keys", a.auth(true, a.listKeys))
 	mux.HandleFunc("POST /api/v1/keys", a.auth(true, a.tambahKey))
 	mux.HandleFunc("DELETE /api/v1/keys/{key}", a.auth(true, a.hapusKey))
