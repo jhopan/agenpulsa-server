@@ -742,3 +742,64 @@ func TestExpireTidakDobel(t *testing.T) {
 		t.Errorf("harus failed, dapat %q", g.Status)
 	}
 }
+
+// TestServerInfo: endpoint alamat server — LAN (auto-detect) + publik (tunnel).
+func TestServerInfo(t *testing.T) {
+	dir := t.TempDir()
+	store, err := db.Open(filepath.Join(dir, "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	_ = store.UpsertAPIKey(&db.APIKey{Key: "K1", Nama: "c1", BolehOrder: true})
+	_ = store.SetSetting("server_url", "https://agenpulsa.jhopan.my.id")
+	_ = store.SetSetting("server_url_lan", "http://192.168.10.21:8800")
+
+	eng, err := engine.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Close()
+
+	a := api.New(store, eng, testWebFS())
+	srv := httptest.NewServer(a.Routes())
+	defer srv.Close()
+
+	// tanpa key -> 401 (endpoint butuh API key)
+	r0, _ := http.Get(srv.URL + "/api/v1/server-info")
+	if r0.StatusCode != 401 {
+		t.Errorf("server-info tanpa key harus 401, got %d", r0.StatusCode)
+	}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/server-info", nil)
+	req.Header.Set("X-API-Key", "K1")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	if r.StatusCode != 200 {
+		t.Fatalf("server-info harus 200, got %d", r.StatusCode)
+	}
+	var out struct {
+		LANURL    string `json:"lan_url"`
+		PublicURL string `json:"public_url"`
+		Webhook   string `json:"webhook_url"`
+		Port      string `json:"port"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.LANURL != "http://192.168.10.21:8800" {
+		t.Errorf("lan_url salah: %q", out.LANURL)
+	}
+	if out.PublicURL != "https://agenpulsa.jhopan.my.id" {
+		t.Errorf("public_url salah: %q", out.PublicURL)
+	}
+	if out.Webhook != "https://agenpulsa.jhopan.my.id/webhook" {
+		t.Errorf("webhook_url salah: %q", out.Webhook)
+	}
+	if out.Port == "" {
+		t.Error("port harus kebaca dari env/default")
+	}
+}

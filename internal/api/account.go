@@ -124,7 +124,9 @@ var settingKeys = map[string]bool{
 	"admin_user":           true,
 	"admin_pass":           true,
 	"isipulsa_username":    true,
-	"server_url":           true, // URL publik server, dipakai client & webhook
+	"server_url":           true, // URL publik server (CF tunnel), dipakai client & webhook
+	"server_url_lan":       true, // URL LAN (opsional) — buat bot/klien lokal, lebih cepat
+	"server_url_tunnel":    true, // URL CF tunnel (opsional) — sama dengan server_url, buat clarity
 	"bot_tg_token":         true, // token bot Telegram — server kirim notif via Bot API
 	"bot_admin_id":         true, // WHITELIST chat ID penerima notif lengkap (pisah koma)
 	"bot_admin_thread_id":  true, // topik (message_thread_id) buat notif admin di supergroup

@@ -282,8 +282,16 @@ label{font-size:13px;color:#344054;font-weight:700;display:block;margin:12px 0 4
 <div class="card">
 <h2>Integrasi</h2>
 <div class="grid2">
-<div><label>URL server (publik, untuk client & webhook)</label><input id="sUrl" style="width:100%" placeholder="http://192.168.1.10:8081"></div>
+<div><label>URL LAN (bot/klien di jaringan lokal — lebih cepat)</label><input id="sUrlLan" style="width:100%" placeholder="http://192.168.10.21:8800"><small id="sUrlLanDetek" style="display:block;color:#888;margin-top:4px"></small></div>
+<div><label>URL Cloudflare Tunnel (publik — webhook paypan)</label><input id="sUrlTunnel" style="width:100%" placeholder="https://agenpulsa.jhopan.my.id"></div>
+</div>
+<div class="grid2">
+<div><label>URL server (umum, fallback client)</label><input id="sUrl" style="width:100%" placeholder="https://agenpulsa.jhopan.my.id"></div>
 <div><label>Paypan secret (HMAC webhook)</label><input id="sPaypan" style="width:100%" placeholder="SECRET-SHARED"></div>
+</div>
+<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+<button class="sec" type="button" onclick="isiOtomatis()">🔍 Isi otomatis dari server</button>
+<button class="sec" type="button" onclick="salinAlamat()">📋 Salin semua alamat</button>
 </div>
 <div class="grid2">
 <div><label>Paypan base URL (API server)</label><input id="sPaypanUrl" style="width:100%" placeholder="https://paypan.jhopan.my.id"></div>
@@ -799,6 +807,8 @@ async function loadSet(){
     $('sUser').value=s.admin_user||'';
     $('sPaypan').value=s.paypan_secret||'';
     $('sUrl').value=s.server_url||'';
+    $('sUrlLan').value=s.server_url_lan||'';
+    $('sUrlTunnel').value=s.server_url_tunnel||'';
     $('sPaypanUrl').value=s.paypan_base_url||'';
     $('sPaypanToken').value=s.paypan_token||'';
     $('sPaypanToken').placeholder='pp_xxxxxxxx';
@@ -815,8 +825,9 @@ async function loadSet(){
     $('sPubThread').value=s.bot_public_thread_id||'';
     $('sSheetUrl').value=s.sheet_backup_url||'';
     $('sSheetToken').value=s.sheet_backup_token||'';
-    // webhook URL = server_url + /webhook (dipakai paypan)
-    $('sWebhook').value=(s.server_url||window.location.origin).replace(/\/+$/,'')+'/webhook';
+    // webhook URL = URL publik (tunnel) + /webhook (dipakai paypan)
+    const pubUrl=(s.server_url_tunnel||s.server_url||window.location.origin).replace(/\/+$/,'');
+    $('sWebhook').value=pubUrl+'/webhook';
     // token gak dibalikin (sensitif) - placeholder saja kalau sudah diset
     $('sBotToken').value=s.bot_tg_token||'';
     $('sBotToken').placeholder='1234567890:AAxxxx...';
@@ -842,6 +853,40 @@ async function hapusKey(key){
   try{await api('/api/v1/keys/'+encodeURIComponent(key),{method:'DELETE'});flash('Key dihapus');loadSet()}
   catch(e){flash(e.message,1)}
 }
+// isiOtomatis: ambil alamat LAN + publik dari server (auto-detect IP).
+async function isiOtomatis(){
+  try{
+    const i=await api('/api/v1/server-info');
+    if(i.lan_url)$('sUrlLan').value=i.lan_url;
+    if(i.public_url&&!$('sUrlTunnel').value.trim())$('sUrlTunnel').value=i.public_url;
+    if(i.public_url&&!$('sUrl').value.trim())$('sUrl').value=i.public_url;
+    const d=$('sUrlLanDetek');
+    if(d)d.textContent='Terdeteksi: '+(i.detected_lan||'?')+' · port '+(i.port||'-')+' · '+(i.lan_url||'LAN tidak terdeteksi');
+    flash('Alamat diisi otomatis');
+  }catch(e){flash('Gagal ambil info server: '+e.message,1)}
+}
+// salinAlamat: copy semua alamat (LAN, tunnel, webhook) buat dipake bot/klien.
+async function salinAlamat(){
+  const blok=[
+    'ALAMAT SERVER AGENPULSA',
+    '',
+    'LAN (bot/klien lokal, cepat):',
+    $('sUrlLan').value.trim()||'(belum diisi)',
+    '',
+    'PUBLIK (Cloudflare Tunnel):',
+    $('sUrlTunnel').value.trim()||$('sUrl').value.trim()||'(belum diisi)',
+    '',
+    'WEBHOOK (paypan):',
+    $('sWebhook').value||'(belum diisi)'
+  ].join('\n');
+  try{await navigator.clipboard.writeText(blok);flash('Alamat disalin ke clipboard')}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=blok;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');flash('Alamat disalin ke clipboard')}catch(e2){flash('Gagal copy',1)}
+    ta.remove();
+  }
+}
+
 async function simpanSet(){
   const btn=$('settingsSaveButton'),status=$('settingsSaveStatus');
   const setStatus=(msg,kind)=>{status.textContent=msg;status.className='save-status '+kind};
@@ -851,6 +896,8 @@ async function simpanSet(){
     if($('sPass').value)body.admin_pass=$('sPass').value;
     if($('sPaypan').value.trim())body.paypan_secret=$('sPaypan').value.trim();
     if($('sUrl').value.trim())body.server_url=$('sUrl').value.trim().replace(/\/+$/,'');
+    if($('sUrlLan').value.trim())body.server_url_lan=$('sUrlLan').value.trim().replace(/\/+$/,'');
+    if($('sUrlTunnel').value.trim())body.server_url_tunnel=$('sUrlTunnel').value.trim().replace(/\/+$/,'');
     if($('sPaypanUrl').value.trim())body.paypan_base_url=$('sPaypanUrl').value.trim().replace(/\/+$/,'');
     if($('sPaypanToken').value.trim())body.paypan_token=$('sPaypanToken').value.trim();
     if($('sBotToken').value.trim())body.bot_tg_token=$('sBotToken').value.trim();

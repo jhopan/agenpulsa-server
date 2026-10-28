@@ -350,6 +350,10 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/account/username", a.auth(true, a.simpanUsername))
 	mux.HandleFunc("GET /api/v1/settings", a.auth(true, a.getSettings))
 	mux.HandleFunc("POST /api/v1/settings", a.auth(true, a.setSettings))
+	// Alamat server: LAN (cepat, buat bot/klien lokal) + publik (CF tunnel).
+	// auth(false) = API key apa pun boleh (cuma URL, bukan secret) — bot perlu
+	// buat cek alamat tanpa punya izin admin.
+	mux.HandleFunc("GET /api/v1/server-info", a.auth(false, a.handleServerInfo))
 	mux.HandleFunc("GET /api/v1/keys", a.auth(true, a.listKeys))
 	mux.HandleFunc("POST /api/v1/keys", a.auth(true, a.tambahKey))
 	mux.HandleFunc("DELETE /api/v1/keys/{key}", a.auth(true, a.hapusKey))
