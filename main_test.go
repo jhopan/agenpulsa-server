@@ -998,3 +998,140 @@ func TestPesanOrderBersihHarga(t *testing.T) {
 		t.Errorf("bagian penting pesan harus kept: %q", pesan)
 	}
 }
+
+// TestCardAPIKeyHanyaDiTabPengaturan: card "API Key client" + tombol
+// "Simpan Pengaturan" harus DI DALAM tab-set (#tab-set), bukan di luar.
+//
+// Bug lama: penutup </div> tab-set ada sebelum card API Key -> card jadi
+// sibling di luar .tab -> .tab{display:none} gak berlaku -> card API Key
+// muncul di SEMUA halaman (dashboard, akun, katalog, pembelian, laporan).
+func TestCardAPIKeyHanyaDiTabPengaturan(t *testing.T) {
+	htmlBytes, err := testWeb.ReadFile("web/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	htmlSrc := string(htmlBytes)
+
+	// --- Parse HTML beneran (bukan regex) ---
+	type node struct {
+		tag      string
+		id       string
+		class    string
+		children []*node
+		parent   *node
+	}
+	rootNode := &node{tag: "#root"}
+	stack := []*node{rootNode}
+
+	attrOf := func(rest, name string) string {
+		marker := name + "=\""
+		p := strings.Index(rest, marker)
+		if p < 0 {
+			return ""
+		}
+		v := rest[p+len(marker):]
+		if q := strings.Index(v, "\""); q >= 0 {
+			return v[:q]
+		}
+		return v
+	}
+
+	for i := 0; i < len(htmlSrc); {
+		lt := strings.IndexByte(htmlSrc[i:], '<')
+		if lt < 0 {
+			break
+		}
+		lt += i
+		gt := strings.IndexByte(htmlSrc[lt:], '>')
+		if gt < 0 {
+			break
+		}
+		gt += lt
+		tagSrc := htmlSrc[lt+1 : gt]
+		selfClosing := strings.HasSuffix(tagSrc, "/")
+		tagSrc = strings.TrimSuffix(tagSrc, "/")
+		sp := strings.IndexAny(tagSrc, " \t\n")
+		tag, rest := tagSrc, ""
+		if sp > 0 {
+			tag, rest = tagSrc[:sp], tagSrc[sp:]
+		}
+		if strings.HasPrefix(tag, "!") || strings.HasPrefix(tag, "?") {
+			i = gt + 1
+			continue
+		}
+		switch tag {
+		case "br", "img", "input", "meta", "link", "hr":
+			i = gt + 1
+			continue
+		}
+		if strings.HasPrefix(tag, "/") {
+			if len(stack) > 1 {
+				stack = stack[:len(stack)-1]
+			}
+			i = gt + 1
+			continue
+		}
+		n := &node{tag: tag, parent: stack[len(stack)-1]}
+		n.id = attrOf(rest, "id")
+		n.class = attrOf(rest, "class")
+		n.parent.children = append(n.parent.children, n)
+		if !selfClosing {
+			stack = append(stack, n)
+		}
+		i = gt + 1
+	}
+
+	// Cari node ber-id tertentu + cek ancestor-nya.
+	var findByID func(id string) *node
+	findByID = func(id string) *node {
+		var res *node
+		var walk func(n *node)
+		walk = func(n *node) {
+			if res != nil {
+				return
+			}
+			if n.id == id {
+				res = n
+				return
+			}
+			for _, c := range n.children {
+				walk(c)
+			}
+		}
+		walk(rootNode)
+		return res
+	}
+	hasAncestor := func(n *node, id string) bool {
+		for p := n.parent; p != nil; p = p.parent {
+			if p.id == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	apiKeyTable := findByID("apikeys")
+	if apiKeyTable == nil {
+		t.Fatal("id=apikeys tidak ditemukan")
+	}
+	if !hasAncestor(apiKeyTable, "tab-set") {
+		t.Error("card API Key (id=apikeys) DI LUAR #tab-set -> muncul di semua halaman")
+	}
+
+	saveBtn := findByID("settingsSaveButton")
+	if saveBtn == nil {
+		t.Fatal("id=settingsSaveButton tidak ditemukan")
+	}
+	if !hasAncestor(saveBtn, "tab-set") {
+		t.Error("tombol Simpan Pengaturan DI LUAR #tab-set -> muncul di semua halaman")
+	}
+
+	// Sanity: tab-set harus ada dan punya anak card
+	tabSet := findByID("tab-set")
+	if tabSet == nil {
+		t.Fatal("tab-set tidak ditemukan")
+	}
+	if len(tabSet.children) == 0 {
+		t.Error("tab-set kosong")
+	}
+}
