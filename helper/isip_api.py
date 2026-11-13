@@ -352,9 +352,23 @@ def op_inject(args):
                 "httpOnly": bool(c.get("httpOnly", False)),
                 "secure": bool(c.get("secure", False)),
             }
-            exp = c.get("expirationDate")
+            # Cookie-Editor pakai "expirationDate"; Playwright/CDP butuh
+            # "expires" (unix detik). Kalau key-nya gak cocok -> session cookie
+            # (EPHEMERAL) -> hilang pas chromium restart.
+            exp = 0
+            for k in ("expirationDate", "expires", "expiry"):
+                v = c.get(k)
+                if isinstance(v, (int, float)) and v > 0:
+                    exp = int(v)
+                    break
             if exp:
-                e["expires"] = int(exp)
+                # pastikan ke depan (cookie expired gak bisa dipakai)
+                if exp < int(time.time()):
+                    exp = int(time.time()) + 30 * 24 * 3600
+                e["expires"] = exp
+            else:
+                # session cookie -> set 30 hari biar awet
+                e["expires"] = int(time.time()) + 30 * 24 * 3600
             ss = str(c.get("sameSite") or "").lower()
             e["sameSite"] = {"strict": "Strict", "lax": "Lax", "no_restriction": "None"}.get(ss, "Lax")
             pw_cookies.append(e)

@@ -6,10 +6,15 @@
 package engine
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -44,8 +49,30 @@ func (e *Engine) ImportCookies(raw string) (int, error) {
 			Name: name, Value: val, Domain: domain, Path: path,
 			HTTPOnly: boolAny(c["httpOnly"]), Secure: boolAny(c["secure"]),
 		}
-		if exp, ok := c["expirationDate"].(float64); ok && exp > 0 {
+		// PENTING: Cookie-Editor export pakai key "expirationDate", TAPI
+		// CDP NetworkCookieParam BUTUH "expires" (unix detik). Kalau key-nya
+		// cuma "expirationDate", ck.Expires = 0 -> cookie jadi SESSION
+		// cookie -> Chromium langsung HAPUS saat profile dibuka lagi ->
+		// "tidak ada cookie di profile" padahal inject reported sukses.
+		//
+		// Terima kedua nama key + fallback ke field "expires".
+		exp := 0.0
+		for _, key := range []string{"expirationDate", "expires", "expiry"} {
+			if v, ok := c[key].(float64); ok && v > 0 {
+				exp = v
+				break
+			}
+		}
+		if exp > 0 {
+			// Pasti ke depan: cookie yang upcoming, jangan kelewat.
+			if exp < float64(time.Now().Unix()) {
+				exp = float64(time.Now().Add(30 * 24 * time.Hour).Unix())
+			}
 			ck.Expires = proto.TimeSinceEpoch(exp)
+		} else {
+			// Tanpa expirationDate -> session cookie (EPHEMERAL, hilang saat
+			// chromium restart). Set expire 30 hari biar awet.
+			ck.Expires = proto.TimeSinceEpoch(time.Now().Add(30 * 24 * time.Hour).Unix())
 		}
 		switch strings.ToLower(fmt.Sprint(c["sameSite"])) {
 		case "strict":
@@ -98,10 +125,78 @@ func (e *Engine) ImportCookies(raw string) (int, error) {
 	if err := b.SetCookies(cookies); err != nil {
 		return 0, err
 	}
-	log.Printf("[LOGIN] %d cookie diinject ke profile", len(cookies))
+	// VERIFIKASI: cookie harus benar-benar nempel di profile. Kalau expired/
+	// session cookie, Chromium HAPUS pas profile dibuka lagi -> inject
+	// "sukses" tapi cookie 0. Cek beneran sebelum lapor sukses.
+	tersisa := e.hitungCookieProfile()
+	log.Printf("[LOGIN] %d cookie diinject ke profile (tersisa di profile: %d)", len(cookies), tersisa)
+	if tersisa == 0 {
+		_ = e.store.SetSetting("cookies_updated_at", "")
+		return len(cookies), fmt.Errorf("cookie terinject %d tapi TIDAK nempel di profile — kemungkinan cookie-nya expired/session. Export ulang dari browser yang SEDANG login (bukan dari cache lama)", len(cookies))
+	}
 	// catat waktu inject — dasar reminder "inject cookies baru tiap 3 hari".
 	_ = e.store.SetSetting("cookies_updated_at", db.NowWIB().Format("2006-01-02 15:04:05"))
 	return len(cookies), nil
+}
+
+// hitungCookieProfile: jumlah cookie isipulsa yang benar-benar ada di
+// profile Chromium (bukan session/expired yg udah dibersih Chromium).
+//
+// DB cookie Chromium = SQLite. Copy dulu ke file temp biar gak lock /
+// ganggu Chromium yg mungkin lagi jalan.
+func (e *Engine) hitungCookieProfile() int {
+	for _, p := range []string{
+		filepath.Join(e.userData, "Default", "Cookies"),
+		filepath.Join(e.userData, "Default", "Network", "Cookies"),
+	} {
+		n := e.countCookieRows(p)
+		if n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
+// countCookieRows: hitung baris cookie host isipulsa.web.id di DB Chromium.
+func (e *Engine) countCookieRows(path string) int {
+	if _, err := os.Stat(path); err != nil {
+		return 0
+	}
+	// copy ke temp: DB mungkin sedang dipakai Chromium (lock).
+	tmp, err := os.CreateTemp("", "ck-*.db")
+	if err != nil {
+		return 0
+	}
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	src, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(tmpName, os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return 0
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return 0
+	}
+	_ = dst.Close()
+
+	d, err := sql.Open("sqlite", tmpName)
+	if err != nil {
+		return 0
+	}
+	defer d.Close()
+	var n int
+	err = d.QueryRow(`SELECT COUNT(*) FROM cookies WHERE host_key LIKE '%isipulsa.web.id'`).Scan(&n)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 func boolAny(v any) bool {

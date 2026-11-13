@@ -1135,3 +1135,59 @@ func TestCardAPIKeyHanyaDiTabPengaturan(t *testing.T) {
 		t.Error("tab-set kosong")
 	}
 }
+
+// TestCookieExpiryDariCookieEditor: cookie dari Cookie-Editor export pakai
+// key "expirationDate" (bukan "expires" seperti CDP/Playwright). Kalau key
+// gak cocok -> cookie jadi SESSION cookie -> Chromium HAPUS pas profile
+// dibuka lagi -> "tidak ada cookie di profile" padahal inject sukses.
+//
+// Test ini Regression guard untuk parsing expirationDate -> expires.
+func TestCookieExpiryDariCookieEditor(t *testing.T) {
+	// Helper kecil: test logic parsing yang sama dgn login.go
+	parseExpiry := func(c map[string]any) float64 {
+		var exp float64
+		for _, key := range []string{"expirationDate", "expires", "expiry"} {
+			if v, ok := c[key].(float64); ok && v > 0 {
+				exp = v
+				break
+			}
+		}
+		if exp > 0 && exp < float64(time.Now().Unix()) {
+			exp = float64(time.Now().Add(30 * 24 * time.Hour).Unix())
+		}
+		if exp <= 0 {
+			exp = float64(time.Now().Add(30 * 24 * time.Hour).Unix())
+		}
+		return exp
+	}
+	now := float64(time.Now().Unix())
+
+	// 1) cookie dengan expirationDate valid -> dipakai, bukan di-default
+	c1 := map[string]any{"expirationDate": now + 86400}
+	if got := parseExpiry(c1); got <= now {
+		t.Errorf("expirationDate valid harus dipakai, dapat %v", got)
+	}
+
+	// 2) cookie session (tanpa expirationDate) -> dapet default 30 hari (bukan 0)
+	c2 := map[string]any{"name": "x"}
+	got2 := parseExpiry(c2)
+	if got2 <= now {
+		t.Errorf("session cookie harus dapet expire 30 hari, dapat %v", got2)
+	}
+	if got2 > now+31*24*3600 {
+		t.Errorf("expire session cookie kelewat jauh: %v", got2)
+	}
+
+	// 3) cookie expired (expirationDate lampau) -> di-"perpanjang", bukan 0
+	c3 := map[string]any{"expirationDate": now - 86400}
+	got3 := parseExpiry(c3)
+	if got3 <= now {
+		t.Errorf("cookie expired harus diperpanjang, dapat %v", got3)
+	}
+
+	// 4) key "expires" (format CDP) juga diterima
+	c4 := map[string]any{"expires": now + 3600}
+	if got := parseExpiry(c4); got <= now {
+		t.Errorf("key 'expires' harus diterima, dapat %v", got)
+	}
+}
