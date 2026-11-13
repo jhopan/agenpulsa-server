@@ -69,7 +69,11 @@ func (a *API) saldoTick() {
 	}
 	ok, saldoStr := a.eng.CekStatus()
 	if !ok {
-		return // login bermasalah — cookie reminder yg handle itu, jangan dobel notif
+		// Login/cookie invalid -> KABARI SEKARANG (rate-limit 1x/3 hari di
+		// kirimCookieInvalid). Ini deteksi TERCEPAS karena monitor saldo
+		// jalan tiap 15 menit (lebih cepat dari monitor cookie 60 menit).
+		a.kirimCookieInvalid("cek saldo: login isipulsa gagal — cookie tidak valid / sesi habis")
+		return
 	}
 	saldo := parseSaldo(saldoStr)
 	if saldo < 0 {

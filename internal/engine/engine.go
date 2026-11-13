@@ -63,6 +63,13 @@ type Engine struct {
 	// Notifier dipanggil tiap order status final (success/failed/cancelled) —
 	// di-set oleh api (TgNotify). Nil = silent.
 	Notifier func(order db.Order, status, pesan string)
+	// LoginInvalidNotifier dipanggil saat cookie isipulsa turns out invalid
+	// (login gagal) — di-set oleh api. Nil = silent.
+	// Dipanggil BANYAK tempat: monitor saldo, monitor cookie, order gagal.
+	// Implementasi di api yang ngatur rate-limit (max 1x / 3 hari).
+	LoginInvalidNotifier func(alasan string)
+	// CookieExpiryNotifier dipanggil saat cookie mau expired (<= N hari).
+	CookieExpiryNotifier func(sisaHari int, expireWIB string, jumlahCookie int)
 }
 
 func New(store *db.Store) (*Engine, error) {
@@ -231,8 +238,50 @@ func (e *Engine) Execute(o *db.Order) {
 	_ = e.store.UpdateOrderStatus(o.ID, status, pesan, orderID)
 	e.Callback(o, status, pesan)
 	e.notifyOrder(*o, status, pesan)
+	// Order gagal karena cookie/sesi login invalid -> kabari admin SEKARANG
+	// (bukan nunggu monitor 60 menit). Notif rate-limit diurus di sisi api.
+	if status == "failed" && looksLikeLoginProblem(pesan) {
+		e.NotifyLoginInvalid("order gagal: " + pesan)
+	}
 	log.Printf("[ORDER #%d] %s %s durasi=%s ref=%s nomor=%s", o.ID, status, o.Label, durasi.Round(time.Millisecond), o.Ref, o.Nomor)
 	_ = modal
+}
+
+// looksLikeLoginProblem: deteksi pesan error yang disebabkan session login
+// isipulsa invalid (bukan masalah lain seperti saldo kurang / paket hilang).
+func looksLikeLoginProblem(pesan string) bool {
+	p := strings.ToLower(pesan)
+	// HATI-HATI: jangan pakai kata umum kayak "expired" — "invoice expired"
+	// (order kadaluarsa) itu BUKAN masalah cookie.
+	kata := []string{
+		"tidak ada cookie", "sesi login habis", "belum login", "login habis",
+		"harus login", "gagal login", "unauthorized", "not logged in",
+		"cookie tidak valid", "sesi habis", "session expired",
+		"login expired", "cookie expired", "cookies expired",
+		"kena cloudflare",
+	}
+	for _, k := range kata {
+		if strings.Contains(p, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// NotifyLoginInvalid: kabari ke api bahwa cookie/sesi login invalid.
+func (e *Engine) NotifyLoginInvalid(alasan string) {
+	if e.LoginInvalidNotifier == nil {
+		return
+	}
+	e.LoginInvalidNotifier(alasan)
+}
+
+// NotifyCookieExpiry: kabari ke api bahwa cookie mau expired.
+func (e *Engine) NotifyCookieExpiry(sisaHari int, expireWIB string, jumlah int) {
+	if e.CookieExpiryNotifier == nil {
+		return
+	}
+	e.CookieExpiryNotifier(sisaHari, expireWIB, jumlah)
 }
 
 // notifyOrder push hasil order ke Notifier (Telegram) kalau terpasang.
@@ -390,4 +439,9 @@ func formatRp(n int64) string {
 		b.WriteRune(c)
 	}
 	return b.String()
+}
+
+// LooksLikeLoginProblemForTest: export untuk test.
+func LooksLikeLoginProblemForTest(pesan string) bool {
+	return looksLikeLoginProblem(pesan)
 }

@@ -44,46 +44,45 @@ func (a *API) StartCookieMonitor() {
 func (a *API) cookieMonitorTick() {
 	expUnix, jumlah := a.eng.CookieExpiry()
 
-	// --- 1. Cookie expired? (7 hari sebelum) ---
+	// --- 1. Cookie mau expired (7 hari sebelum) ---
 	if expUnix > 0 {
 		sisa := time.Until(time.Unix(expUnix, 0))
 		if sisa <= 0 {
-			// sudah expired — biarkan notif "invalid" yang handle
+			// sudah lewat tanggal expired -> notif invalid (login pasti gagal)
 			a.kirimCookieInvalid("cookie isipulsa sudah EXPIRED (tenggat lewat)")
-			return
-		}
-		hari := int(sisa.Hours() / 24)
-		if hari <= cookieExpiryWarnHari {
-			// notif 1x per hari (kunci tanggal) — biar gak spam tiap jam
-			key := "cookie_expiry_notif_" + db.NowWIB().Format("2006-01-02")
-			sudah := a.store.GetSetting(key, "") == "1"
-			if !bolehNotifExpiry(hari, sudah) {
-				return
+		} else {
+			hari := int(sisa.Hours() / 24)
+			if hari <= cookieExpiryWarnHari {
+				// notif 1x per hari (kunci tanggal) — biar gak spam tiap jam
+				key := "cookie_expiry_notif_" + db.NowWIB().Format("2006-01-02")
+				sudah := a.store.GetSetting(key, "") == "1"
+				if bolehNotifExpiry(hari, sudah) {
+					_ = a.store.SetSetting(key, "1")
+					// bersihkan key hari-hari sebelumnya biar settings gak numpuk
+					for i := 1; i <= 3; i++ {
+						_ = a.store.SetSetting("cookie_expiry_notif_"+db.NowWIB().AddDate(0, 0, -i).Format("2006-01-02"), "")
+					}
+					expWIB := time.Unix(expUnix, 0).In(db.WIBLoc()).Format("2006-01-02 15:04")
+					pesan := fmt.Sprintf(
+						"⏳ *Cookies isipulsa mau expired*\n\n"+
+							"Tinggal *%d hari* lagi (%s).\n"+
+							"Total cookie di profile: %d\n\n"+
+							"Segera inject cookies baru di web admin → Akun Login, "+
+							"supaya order gak gagal tengah malam.",
+						hari, expWIB, jumlah,
+					)
+					log.Printf("[COOKIE EXPIRY] %d hari lagi", hari)
+					a.TgNotify(pesan)
+				}
 			}
-			_ = a.store.SetSetting(key, "1")
-			// bersihkan key hari-hari sebelumnya biar settings gak numpuk
-			for i := 1; i <= 3; i++ {
-				_ = a.store.SetSetting("cookie_expiry_notif_"+db.NowWIB().AddDate(0, 0, -i).Format("2006-01-02"), "")
-			}
-			pesan := fmt.Sprintf(
-				"⏳ *Cookies isipulsa mau expired*\n\n"+
-					"Tinggal *%d hari* lagi (%s).\n"+
-					"Total cookie di profile: %d\n\n"+
-					"Segera inject cookies baru di web admin → Akun Login, "+
-					"supaya order gak gagal tengah malam.",
-				hari, db.NowWIB().Add(time.Duration(hari)*24*time.Hour).Format("2006-01-02"),
-				jumlah,
-			)
-			log.Printf("[COOKIE EXPIRY] %d hari lagi", hari)
-			a.TgNotify(pesan)
 		}
-		return
 	}
 
 	// --- 2. Cookie invalid / login gagal (max 1x per 3 hari) ---
+	// Selalu dicek — bahkan kalau cookie punya tanggal expired.
 	ok, _ := a.eng.CekStatus()
 	if ok {
-		// login normal — reset flag biar_notif invalid lagi bisa terkirim
+		// login normal — reset flag biar notif invalid lagi bisa terkirim
 		_ = a.store.SetSetting("cookie_invalid_notif_at", "")
 		return
 	}

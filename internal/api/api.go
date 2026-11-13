@@ -53,6 +53,13 @@ func New(store *db.Store, eng *engine.Engine, webFS embed.FS) *API {
 			a.TgNotifyPublic(formatOrderNotifPublic(&o, status, pesan))
 		}
 	}
+	// Cookie/sesi login invalid -> kabari admin SEKARANG (bukan nunggu
+	// monitor 60 menit). Dipanggil dari: monitor cookie, monitor saldo,
+	// dan setiap order yang gagal karena login. Rate-limit (max 1x/3 hari)
+	// diurus di kirimCookieInvalid.
+	eng.LoginInvalidNotifier = func(alasan string) {
+		a.kirimCookieInvalid(alasan)
+	}
 	return a
 }
 

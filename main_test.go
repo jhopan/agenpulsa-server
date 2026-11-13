@@ -1233,3 +1233,35 @@ func TestNotifCookieExpiryInvalid(t *testing.T) {
 		t.Error("sudah notif hari ini -> jangan notif lagi (1x/hari)")
 	}
 }
+
+// TestLooksLikeLoginProblem: order gagal karena cookie/sesi invalid harus
+// terdeteksi -> notif admin langsung (bukan nunggu monitor).
+func TestLooksLikeLoginProblem(t *testing.T) {
+	harus := []string{
+		"tidak ada cookie di profile",
+		"sesi login habis",
+		"ERROR: isip_api: tidak ada cookie di profile",
+		"cookie tidak valid",
+		"kena Cloudflare challenge saat order",
+		"sesi habis",
+	}
+	for _, p := range harus {
+		if !engine.LooksLikeLoginProblemForTest(p) {
+			t.Errorf("harus terdeteksi sbg masalah login: %q", p)
+		}
+	}
+	// bukan masalah login -> jangan dinotif cookie invalid
+	bukan := []string{
+		"Sisa saldo kamu tidak cukup",
+		"ORDER GAGAL. Alasan: voucher - tidak ada di isipulsa",
+		"ORDER DIBATALKAN: harga naik. Sekarang Rp 7.000",
+		"nomor HP tidak benar",
+		"expired — tidak dibayar dalam 5 menit", // invoice expired, BUKAN cookie
+		"invoice expired (tidak dibayar dalam 5 menit)",
+	}
+	for _, p := range bukan {
+		if engine.LooksLikeLoginProblemForTest(p) {
+			t.Errorf("TIDAK boleh dianggap masalah login: %q", p)
+		}
+	}
+}
