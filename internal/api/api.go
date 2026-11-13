@@ -287,26 +287,20 @@ func (a *API) cookieReminderTick() {
 func (a *API) cookieStatus(w http.ResponseWriter, r *http.Request) {
 	umur := a.cookieUmurJam()
 	sudahKirim := a.store.GetSetting("cookie_notif_sent", "") == db.NowWIB().Format("2006-01-02")
+	extra := a.cookieStatusExtra()
 	writeJSON(w, 200, map[string]any{
 		"umur_jam":               umur,
 		"umur_hari":              int(umur / 24),
 		"reminder":               umur >= cookieReminderJam,
 		"sudah_dikirim_hari_ini": sudahKirim,
-		"pesan":                  cookiePesan(umur),
+		"pesan":                  a.cookiePesan(umur),
+		"expire_unix":            extra.ExpireUnix,
+		"expire_wib":             extra.ExpireWIB,
+		"sisa_hari":              extra.SisaHari,
+		"jumlah_cookie":          extra.JumlahCookie,
 	})
 }
 
-func cookiePesan(umur float64) string {
-	if umur < 0 {
-		return "Belum ada cookies tercatat — inject cookies di web admin -> Akun Login."
-	}
-	hari := int(umur / 24)
-	if umur >= cookieReminderJam {
-		return fmt.Sprintf("⚠️ Cookies isipulsa sudah %d hari (>= 3 hari). Inject cookies baru SEKARANG di web admin -> Akun Login sebelum sesi mati mendadak.", hari)
-	}
-	sisa := int(cookieReminderJam-umur) / 24
-	return fmt.Sprintf("Cookies isipulsa %d hari. Sisa %d hari sebelum perlu inject baru.", hari, sisa+1)
-}
 
 func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()

@@ -157,6 +157,88 @@ func (e *Engine) hitungCookieProfile() int {
 	return 0
 }
 
+// CookieExpiry: tanggal kedaluwarsa cookie isipulsa paling awal (unix detik)
+// + jumlah cookie isipulsa yang ada di profile.
+//
+// Dipakai buat notif "cookie mau expired" (7 hari sebelum) — jauh lebih
+// akurat daripadaumur inject, karena cookie asli punya masa berlaku
+// sendiri (biasanya 30 hari, atau session cookie = 0).
+func (e *Engine) CookieExpiry() (expUnix int64, jumlah int) {
+	for _, p := range []string{
+		filepath.Join(e.userData, "Default", "Cookies"),
+		filepath.Join(e.userData, "Default", "Network", "Cookies"),
+	} {
+		exp, n := e.readCookieExpiry(p)
+		if n > 0 {
+			return exp, n
+		}
+	}
+	return 0, 0
+}
+
+// readCookieExpiry: baca host_key + expires_utc cookie isipulsa dari DB Chromium.
+// expires_utc = microseconds since epoch (format Chrome).
+func (e *Engine) readCookieExpiry(path string) (int64, int) {
+	if _, err := os.Stat(path); err != nil {
+		return 0, 0
+	}
+	tmp, err := os.CreateTemp("", "ckx-*.db")
+	if err != nil {
+		return 0, 0
+	}
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	src, err := os.Open(path)
+	if err != nil {
+		return 0, 0
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(tmpName, os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return 0, 0
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return 0, 0
+	}
+	_ = dst.Close()
+
+	d, err := sql.Open("sqlite", tmpName)
+	if err != nil {
+		return 0, 0
+	}
+	defer d.Close()
+	rows, err := d.Query(`SELECT expires_utc FROM cookies WHERE host_key LIKE '%isipulsa.web.id'`)
+	if err != nil {
+		return 0, 0
+	}
+	defer rows.Close()
+	var (
+		jumlah int
+		expMin int64
+	)
+	for rows.Next() {
+		var e int64
+		if err := rows.Scan(&e); err != nil {
+			continue
+		}
+		jumlah++
+		if e <= 0 {
+			// session cookie (expired 0) -> paling cepat, tapi berarti tak ada
+			// tanggal expired. Jangan dipakai sebagai "expired" — skip.
+			continue
+		}
+		// Chrome: microseconds since epoch
+		sec := e / 1_000_000
+		if expMin == 0 || sec < expMin {
+			expMin = sec
+		}
+	}
+	return expMin, jumlah
+}
+
 // countCookieRows: hitung baris cookie host isipulsa.web.id di DB Chromium.
 func (e *Engine) countCookieRows(path string) int {
 	if _, err := os.Stat(path); err != nil {

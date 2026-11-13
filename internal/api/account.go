@@ -26,6 +26,11 @@ type akunStatus struct {
 	// umur cookies sejak inject terakhir + flag reminder (>= 3 hari).
 	CookieUmurJam  float64 `json:"cookie_umur_jam"`
 	CookieReminder bool    `json:"cookie_reminder"`
+	// masa berlaku cookie dari DB Chromium (lebih akurat dari umur inject).
+	ExpireUnix   int64  `json:"expire_unix"`
+	ExpireWIB    string `json:"expire_wib"`
+	SisaHari     int    `json:"sisa_hari"`
+	JumlahCookie int    `json:"jumlah_cookie"`
 }
 
 const cookieReminderJam = 72.0 // 3 hari
@@ -54,6 +59,11 @@ func (a *API) account(w http.ResponseWriter, r *http.Request) {
 		CookieUmurJam:  umur,
 		CookieReminder: umur >= cookieReminderJam,
 	}
+	extra := a.cookieStatusExtra()
+	st.ExpireUnix = extra.ExpireUnix
+	st.ExpireWIB = extra.ExpireWIB
+	st.SisaHari = extra.SisaHari
+	st.JumlahCookie = extra.JumlahCookie
 	ok, saldo := a.eng.CekStatus()
 	st.Login = ok
 	if saldo != "" && saldo != "Error" && saldo != "-" {

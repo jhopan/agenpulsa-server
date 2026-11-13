@@ -56,7 +56,8 @@ func main() {
 
 	h := api.New(store, eng, webFS)
 	h.StartReconcile() // poll paypan: order paid/expired gak nyangkut walau webhook hilang
-	h.StartCookieReminder() // reminder cookies 3 hari (log); bot TG yang notifkan admin
+	h.StartCookieReminder()
+	h.StartCookieMonitor() // notif cookie mau expired (7 hari) + invalid (max 1x/3 hari) // reminder cookies 3 hari (log); bot TG yang notifkan admin
 	h.StartSaldoMonitor() // alert saldo < Rp 20.000 (settings saldo_min) via Telegram
 	h.StartWatchdog()     // order nyangkut > 10 menit -> failed + notif (tanpa retry)
 	h.StartRateLimitSweep() // bersihkan peta rate limit

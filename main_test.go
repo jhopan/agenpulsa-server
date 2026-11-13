@@ -1191,3 +1191,45 @@ func TestCookieExpiryDariCookieEditor(t *testing.T) {
 		t.Errorf("key 'expires' harus diterima, dapat %v", got)
 	}
 }
+
+// TestNotifCookieExpiryInvalid: aturan notif cookie
+//  1. expired <= 7 hari -> info (1x/hari)
+//  2. invalid -> max 1x per 3 hari
+func TestNotifCookieExpiryInvalid(t *testing.T) {
+	now := db.NowWIB()
+
+	// --- invalid: max 1x per 3 hari ---
+	if !api.BolehNotifInvalidForTest("", now) {
+		t.Error("belum pernah notif -> harus boleh")
+	}
+	baru := now.Format("2006-01-02 15:04:05")
+	if api.BolehNotifInvalidForTest(baru, now) {
+		t.Error("baru saja notif -> harus DILEWATI (anti spam)")
+	}
+	if api.BolehNotifInvalidForTest(now.AddDate(0, 0, -2).Format("2006-01-02 15:04:05"), now) {
+		t.Error("2 hari lalu -> masih dalam 3 hari, harus DILEWATI")
+	}
+	if !api.BolehNotifInvalidForTest(now.AddDate(0, 0, -4).Format("2006-01-02 15:04:05"), now) {
+		t.Error("4 hari lalu -> harus BOLEH notif lagi")
+	}
+	if !api.BolehNotifInvalidForTest("format-ngawur", now) {
+		t.Error("format rusak -> harus boleh (mending spam daripada diam)")
+	}
+
+	// --- expired: hanya <= 7 hari, max 1x/hari ---
+	if api.BolehNotifExpiryForTest(30, false) {
+		t.Error("30 hari lagi -> jangan notif")
+	}
+	if api.BolehNotifExpiryForTest(8, false) {
+		t.Error("8 hari lagi -> masih di luar ambang 7 hari")
+	}
+	if !api.BolehNotifExpiryForTest(7, false) {
+		t.Error("tepat 7 hari -> harus notif")
+	}
+	if !api.BolehNotifExpiryForTest(0, false) {
+		t.Error("hari ini expired -> harus notif")
+	}
+	if api.BolehNotifExpiryForTest(3, true) {
+		t.Error("sudah notif hari ini -> jangan notif lagi (1x/hari)")
+	}
+}
