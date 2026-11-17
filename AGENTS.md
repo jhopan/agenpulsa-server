@@ -1,6 +1,6 @@
 # AgenPulsa Server
 
-Core order pulsa/paket kuota isipulsa.web.id sebagai HTTP server + web admin. Dibangun ulang dengan Go (rod + SQLite + stdlib), terpisah dari client (bot Telegram lama di `../AgenPulsa/`, bot WA, Paypan).
+Core order pulsa/paket kuota isipulsa.web.id sebagai HTTP server + web admin. Dibangun ulang dengan Go (HTTP helper + SQLite + stdlib), terpisah dari client (bot Telegram lama di `../AgenPulsa/`, bot WA, Paypan).
 
 ## Konsep
 
@@ -8,7 +8,7 @@ Core order pulsa/paket kuota isipulsa.web.id sebagai HTTP server + web admin. Di
 agenpulsa-server (repo ini)
 ├── HTTP API      <- client: bot TG lama, bot WA, Paypan
 ├── Web admin     <- browser (embed, stdlib net/http)
-├── Worker rod    <- Chromium, queue 1 jalur, order isipulsa
+├── Worker HTTP   <- queue 1 jalur, order isipulsa via helper/isip_api.py
 ├── Scheduler     <- jadwal harian/interval/sekali (WIB)
 └── SQLite        <- catalog, orders, schedules, contacts, settings, api_keys
 ```
@@ -19,15 +19,15 @@ Server satu-satunya yang buka browser. Client hanya bicara API.
 
 ```bash
 go build -o agenpulsa-server .
-./agenpulsa-server          # default :8081, DB data/agenpulsa.db, profile/ (user-data-dir rod)
+./agenpulsa-server          # default :8081, DB data/agenpulsa.db, jar cookie data/cookies.json
 ```
 
 Env:
 - `AP_PORT` (default 8081)
 - `AP_DB` (default data/agenpulsa.db)
-- `AP_PROFILE` (default profile/) — user-data-dir Chromium; cookie login isipulsa di sini
+- `AP_COOKIES` (default `<dir AP_DB>/cookies.json`) — jar cookie isipulsa (JSON export Cookie-Editor, 0600)
 
-Chromium: rod auto-download; fallback `/usr/bin/chromium`, `/usr/bin/chromium-browser`, atau `chromium` di PATH.
+Tanpa Chromium/CDP/Playwright: semua request isipulsa lewat `helper/isip_api.py` (Python + `requests`).
 
 ## Setup awal
 
@@ -214,7 +214,7 @@ diblokir → script berhenti & kasih instruksi hapus webhook. Kalau
 `message_thread_id` kosong = pesan masuk di General, bukan topik.
 
 **Update = NON-DESTRUKTIF.** `install.sh`/`ap update` tidak pernah menyentuh:
-`data/` (SQLite), `profile/` (cookies), `.env` (port/path), service file.
+`data/` (SQLite + `cookies.json`), `.env` (port/path), service file.
 Yang ditimpa hanya `web/`, `helper/`, dan binary. Backup binary disisakan 3
 terbaru (sisanya dipangkas otomatis). Saat update, script melaporkan
 config lama yang dipertahankan (port + path DB).
@@ -276,7 +276,7 @@ go test ./...     # normalisasi nomor, parse harga, boundary maintenance, ref id
 go vet ./...
 ```
 
-Test hermetic: SQLite di t.TempDir + httptest, browser rod tidak jalan (lazy). Butuh Go 1.25.
+Test hermetic: SQLite di t.TempDir + httptest, tanpa browser. Butuh Go 1.25.
 
 ## Batas lingkup (WAJIB dipatuhi)
 
@@ -303,7 +303,7 @@ Lingkup aman (boleh edit):
 
 - Deploy rutin / pengujian / iterasi → **staging armbian** (`./deploy.sh staging`).
 - Deploy ke **debian (production) HANYA** setelah user eksplisit bilang "deploy ke production" / "deploy ke debian". Jangan pernah auto-deploy ke production.
-- Service di masing-masing host: `agenpulsa-server.service` (DB `/opt/agenpulsa/data/agenpulsa.db`, profile `/opt/agenpulsa/profile`).
+- Service di masing-masing host: `agenpulsa-server.service` (DB `/opt/agenpulsa/data/agenpulsa.db`, jar cookie `/opt/agenpulsa/data/cookies.json`).
 - Service TAMBAHAN di debian (jangan tomper): `cloudflare-agenpulsa.service` (tunnel `agenpulsa.jhopan.my.id`).
 - DB runtime debian `/opt/agenpulsa/data/agenpulsa.db` (settings/katalog — via API atau SQL hati-hati)
 
@@ -316,9 +316,9 @@ Lingkup TERLARANG (lapor saja, jangan edit):
 
 ## Status migrasi
 
-- Server core: SKELETON JALAN (order engine rod, queue, scheduler, API, web admin, webhook paypan).
+- Server core: SKELETON JALAN (order engine HTTP, queue, scheduler, API, web admin, webhook paypan).
 - Bot Telegram lama (`../AgenPulsa/`): TIDAK diubah, masih dipakai produksi. Nanti tgbot.py jadi client API ini.
-- Login isipulsa = inject cookies (export Cookie-Editor) — login interaktif/VNC DIHAPUS.
+- Login isipulsa = inject cookies (export Cookie-Editor) ke jar JSON — tanpa browser/VNC/CDP.
 - Belum ada: order batch, retry callback, admin form UI (sekarang read-only). Paypan connector di sisi paypan belum dibuat.
 
 ## Layout
@@ -329,7 +329,7 @@ main_test.go         # test utama
 web_test.go          # testWebFS embed + driver sqlite untuk test
 web/index.html       # web admin (embed)
 internal/db/         # db.go (Open, pragma WAL) + store.go (CRUD) + schema.sql (embed)
-internal/engine/     # rod: order/search/cekstatus, queue worker, guard, cari chromium
+internal/engine/     # order/search/cekstatus via helper HTTP, queue worker, guard cookie
 internal/scheduler/  # jadwal WIB harian/interval/sekali, loop 30 detik
 internal/api/        # api.go (routes, auth API key) + paypan.go (webhook HMAC)
 ```

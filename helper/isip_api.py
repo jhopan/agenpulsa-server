@@ -2,24 +2,21 @@
 """isip_api.py — klien isipulsa.web.id via HTTP murni (requests).
 
 TANPA Chromium/Turnstile: semua pakai cookies sesi + CSRF + UA yang sama.
-Cookies diambil dari profile Chromium (dari inject Cookie-Editor).
+Cookies dibaca dari jar JSON (hasil inject di web admin, format Cookie-Editor).
 
 Pakai:
-  python isip_api.py cekstatus --profile profile
-  python isip_api.py search    --profile profile --tab "Paket Kuota" --cari "5GB"
-  python isip_api.py order     --profile profile --nomor 0812... --voucher 701 [--harga-max 60000]
-  python isip_api.py inject    --profile profile --json-file c.json
+  python isip_api.py cekstatus --cookies cookies.json
+  python isip_api.py search    --cookies cookies.json --tab "Paket Kuota" --cari "5GB"
+  python isip_api.py order     --cookies cookies.json --nomor 0812... --voucher 701 [--harga-max 60000]
 
 Output: satu baris JSON {"ok":..,"login":..,"saldo":..,"items":..,"pesan":..}
 """
 import argparse
 import ast
-import glob
+import atexit
 import json
 import os
 import re
-import shutil
-import sqlite3
 import sys
 import time
 import tempfile
@@ -122,25 +119,8 @@ def out(ok=False, **kw):
     sys.exit(0 if ok else 1)
 
 
-def chromium_cookies(profile):
-    """Baca cookies isipulsa dari profil Chromium via playwright context.
-
-    Playwright yang decrypt (key dari profile sendiri) — tanpa playwright ini
-    gak jalan di debian (cookie value terenkripsi v10).
-    """
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(profile, headless=True)
-        try:
-            cookies = ctx.cookies([BASE])
-        finally:
-            ctx.close()
-    return cookies
-
-
 def load_cookie_file(path):
-    """Export Cookie-Editor -> list dict Playwright."""
+    """Jar cookie (format Cookie-Editor) -> list dict."""
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     out = []
@@ -151,7 +131,85 @@ def load_cookie_file(path):
     return out
 
 
-def new_session(cookies):
+def load_cookie_jar(path):
+    """Baca jar; kalau belum ada / rusak -> keluar dengan pesan jelas.
+
+    login/saldo ikut diisi false/"-" supaya output tetap JSON valid untuk
+    semua subcommand (search/order mengabaikannya).
+    """
+    try:
+        return load_cookie_file(path)
+    except FileNotFoundError:
+        out(False, login=False, saldo="-",
+            pesan=f"tidak ada cookie di jar ({path}) — inject cookies dulu di web admin -> Akun Login")
+    except Exception as e:  # noqa: BLE001 — apa pun penyebabnya, jangan crash
+        out(False, login=False, saldo="-",
+            pesan=f"jar cookie tidak bisa dibaca ({path}): {e}")
+
+
+def write_jar_atomic(path, jar):
+    """Tulis jar atomik (file temp + rename) dengan permission 0600."""
+    folder = os.path.dirname(os.path.abspath(path)) or "."
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=folder, prefix=".cookies-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(jar, f, indent=1, ensure_ascii=False)
+            f.write("\n")
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass  # windows
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def persist_jar(path, session):
+    """Best effort: simpan balik value/expiry cookie yang diperbarui isipulsa.
+
+    isipulsa memutar `sid` & memperpanjang `csrf_cookie` tiap request; tanpa
+    write-back, jar makin basi. Hanya cookie yang SUDAH ada di jar yang
+    di-update (tidak menambah/menghapus entri).
+    """
+    if not path or not session:
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            jar = json.load(f)
+    except Exception:
+        return
+    fresh = {}
+    for c in session.cookies:
+        fresh[(c.name, (c.domain or "").lstrip("."), c.path or "/")] = c
+    changed = False
+    for entry in jar:
+        if not isinstance(entry, dict):
+            continue
+        key = (entry.get("name"), (entry.get("domain") or "").lstrip("."),
+               entry.get("path") or "/")
+        c = fresh.get(key)
+        if not c:
+            continue
+        if c.value and entry.get("value") != c.value:
+            entry["value"] = c.value
+            changed = True
+        if c.expires and abs(float(entry.get("expirationDate") or 0) - float(c.expires)) > 1:
+            entry["expirationDate"] = float(c.expires)
+            entry["session"] = False
+            changed = True
+    if changed:
+        try:
+            write_jar_atomic(path, jar)
+        except Exception:
+            pass  # best effort: jar lama tetap valid
+
+
+def new_session(cookies, jar_path=""):
     s = requests.Session()
     for c in cookies:
         s.cookies.set(c["name"], c["value"],
@@ -162,6 +220,9 @@ def new_session(cookies):
         "Referer": BASE,
         "Accept-Language": "id-ID,id;q=0.9",
     })
+    # out() memakai sys.exit -> atexit selalu jalan, termasuk saat error.
+    if jar_path:
+        atexit.register(persist_jar, jar_path, s)
     return s
 
 
@@ -203,10 +264,11 @@ def get_csrf(s, page_html=None):
 
 
 def op_cekstatus(args):
-    cookies = chromium_cookies(args.profile)
+    cookies = load_cookie_jar(args.cookies)
     if not cookies:
-        out(False, login=False, saldo="-", pesan="tidak ada cookie di profile")
-    s = new_session(cookies)
+        out(False, login=False, saldo="-",
+            pesan="jar cookie kosong — inject cookies di web admin -> Akun Login")
+    s = new_session(cookies, args.cookies)
     r = get_retry(s, BASE)
     if "Just a moment" in r.text:
         out(False, login=False, saldo="-", pesan="kena Cloudflare challenge")
@@ -223,8 +285,8 @@ def op_cekstatus(args):
 
 
 def op_search(args):
-    cookies = chromium_cookies(args.profile)
-    s = new_session(cookies)
+    cookies = load_cookie_jar(args.cookies)
+    s = new_session(cookies, args.cookies)
     page = args.tab.lower().replace("paket kuota", "paket_kuota").replace(" ", "_")
     r = get_retry(s, f"{BASE}{page}" if page in ("pulsa", "paket_kuota") else BASE)
     if "Just a moment" in r.text:
@@ -239,8 +301,8 @@ def op_search(args):
 
 
 def op_order(args):
-    cookies = chromium_cookies(args.profile)
-    s = new_session(cookies)
+    cookies = load_cookie_jar(args.cookies)
+    s = new_session(cookies, args.cookies)
 
     # 1. halaman produk -> csrf + konfirmasi login
     page = args.produk or "pulsa"
@@ -333,67 +395,24 @@ def op_order(args):
     out(False, pesan=f"{catatan}ORDER GAGAL. Alasan: {errors}")
 
 
-def op_inject(args):
-    """Inject cookie file -> profile chromium (dipakai semua operasi HTTP)."""
-    cookies = load_cookie_file(args.json_file)
-    if not cookies:
-        out(False, pesan="tidak ada cookie valid di file")
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(args.profile, headless=True)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        pw_cookies = []
-        for c in cookies:
-            e = {
-                "name": c["name"], "value": c["value"],
-                "domain": c.get("domain") or ".isipulsa.web.id",
-                "path": c.get("path") or "/",
-                "httpOnly": bool(c.get("httpOnly", False)),
-                "secure": bool(c.get("secure", False)),
-            }
-            # Cookie-Editor pakai "expirationDate"; Playwright/CDP butuh
-            # "expires" (unix detik). Kalau key-nya gak cocok -> session cookie
-            # (EPHEMERAL) -> hilang pas chromium restart.
-            exp = 0
-            for k in ("expirationDate", "expires", "expiry"):
-                v = c.get(k)
-                if isinstance(v, (int, float)) and v > 0:
-                    exp = int(v)
-                    break
-            if exp:
-                # pastikan ke depan (cookie expired gak bisa dipakai)
-                if exp < int(time.time()):
-                    exp = int(time.time()) + 30 * 24 * 3600
-                e["expires"] = exp
-            else:
-                # session cookie -> set 30 hari biar awet
-                e["expires"] = int(time.time()) + 30 * 24 * 3600
-            ss = str(c.get("sameSite") or "").lower()
-            e["sameSite"] = {"strict": "Strict", "lax": "Lax", "no_restriction": "None"}.get(ss, "Lax")
-            pw_cookies.append(e)
-        ctx.add_cookies(pw_cookies)
-        ctx.close()
-    out(True, jumlah=len(pw_cookies), pesan=f"{len(pw_cookies)} cookie diinject ke profile")
-
-
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
+    default_jar = os.environ.get("AP_COOKIES") or "cookies.json"
 
     s = sub.add_parser("cekstatus")
-    s.add_argument("--profile", default="profile")
+    s.add_argument("--cookies", default=default_jar)
     s.set_defaults(fn=op_cekstatus)
 
     s = sub.add_parser("search")
-    s.add_argument("--profile", default="profile")
+    s.add_argument("--cookies", default=default_jar)
     s.add_argument("--tab", default="Paket Kuota")
     s.add_argument("--cari", default="")
     s.add_argument("--limit", type=int, default=20)
     s.set_defaults(fn=op_search)
 
     s = sub.add_parser("order")
-    s.add_argument("--profile", default="profile")
+    s.add_argument("--cookies", default=default_jar)
     s.add_argument("--nomor", required=True)
     s.add_argument("--produk", default="pulsa")
     s.add_argument("--voucher")
@@ -402,11 +421,6 @@ def main():
     s.add_argument("--cari")
     s.add_argument("--harga-max", type=int, default=0)
     s.set_defaults(fn=op_order)
-
-    s = sub.add_parser("inject")
-    s.add_argument("--profile", default="profile")
-    s.add_argument("--json-file", required=True)
-    s.set_defaults(fn=op_inject)
 
     args = ap.parse_args()
     args.fn(args)

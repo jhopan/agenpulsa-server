@@ -1,5 +1,5 @@
 // Package engine: jalur HTTP murni ke isipulsa via isip_api.py (requests +
-// cookies profile). TANPA Chromium di jalur utama — bebas Cloudflare/Turnstile.
+// cookies jar). TANPA Chromium — bebas Cloudflare/Turnstile.
 package engine
 
 import (
@@ -39,6 +39,29 @@ type isipResult struct {
 	Harga   int64  `json:"harga"`
 }
 
+// helperPath: cari isip_api.py. Dicek relatif ke CWD, ke binary, lalu naik
+// dari CWD (go run / go test jalan di subfolder, bukan root repo).
+func helperPath() string {
+	cands := []string{filepath.Join("helper", "isip_api.py")}
+	if exe, err := os.Executable(); err == nil {
+		cands = append(cands, filepath.Join(filepath.Dir(exe), "helper", "isip_api.py"))
+	}
+	if wd, err := os.Getwd(); err == nil {
+		for d := wd; ; d = filepath.Dir(d) {
+			cands = append(cands, filepath.Join(d, "helper", "isip_api.py"))
+			if filepath.Dir(d) == d {
+				break
+			}
+		}
+	}
+	for _, c := range cands {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return "isip_api.py"
+}
+
 // runIsip panggil isip_api.py <args...>, parse JSON output terakhir.
 func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 	py := "python"
@@ -48,24 +71,9 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 			py = "python"
 		}
 	}
-	// Cari helper: dulu relatif ke CWD, lalu relatif ke binary (deploy systemd
-	// WorkingDirectory=/opt/agenpulsa -> helper/ ada, tapi LookPath ga cek path
-	// relatif karena bukan PATH -> harus cek file langsung).
-	helper := filepath.Join("helper", "isip_api.py")
-	if _, err := os.Stat(helper); err != nil {
-		if exe, err := os.Executable(); err == nil {
-			cand := filepath.Join(filepath.Dir(exe), "helper", "isip_api.py")
-			if _, err := os.Stat(cand); err == nil {
-				helper = cand
-			} else {
-				helper = "isip_api.py"
-			}
-		} else {
-			helper = "isip_api.py"
-		}
-	}
-	full := append([]string{helper}, args...) // subcommand dulu, --profile sesudahnya
-	// Context + timeout + kill process group: python/Playwright yg nge-hang
+	helper := helperPath()
+	full := append([]string{helper}, args...) // subcommand dulu, opsi sesudahnya
+	// Context + timeout + kill process group: python/requests yg nge-hang
 	// harus dibunuh, bukan nunggu selamanya.
 	ctx, cancel := context.WithTimeout(context.Background(), isipTimeout)
 	defer cancel()
@@ -100,16 +108,24 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 
 // IsipCekStatus login + saldo via HTTP murni.
 func (e *Engine) IsipCekStatus() (bool, string, error) {
-	r, err := e.runIsip("cekstatus", "--profile", e.userData)
+	login, saldo, _, err := e.IsipCekStatusDetail()
+	return login, saldo, err
+}
+
+// IsipCekStatusDetail: seperti IsipCekStatus + alasan dari helper (mis.
+// "tidak ada cookie di profile", "kena Cloudflare challenge") supaya bisa
+// ditampilkan ke admin saat inject cookies gagal login.
+func (e *Engine) IsipCekStatusDetail() (login bool, saldo, pesan string, err error) {
+	r, err := e.runIsip("cekstatus", "--cookies", e.cookieFile)
 	if err != nil {
-		return false, "Error", err
+		return false, "Error", err.Error(), err
 	}
-	return r.Login, r.Saldo, nil
+	return r.Login, r.Saldo, r.Pesan, nil
 }
 
 // IsipSearch cari paket dari daftar voucher halaman produk.
 func (e *Engine) IsipSearch(tab, cari string, limit int) ([]map[string]string, error) {
-	r, err := e.runIsip("search", "--profile", e.userData, "--tab", tab, "--cari", cari, "--limit", fmt.Sprint(limit))
+	r, err := e.runIsip("search", "--cookies", e.cookieFile, "--tab", tab, "--cari", cari, "--limit", fmt.Sprint(limit))
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +147,7 @@ func (e *Engine) IsipSearch(tab, cari string, limit int) ([]map[string]string, e
 // kalau isipulsa rename/hapus paket, order dibatalkan atau fallback by nama).
 // operatorPaket = provider paket katalog (guard: prefix nomor harus cocok).
 func (e *Engine) IsipOrder(nomor, produk, voucher, namaAsli, operatorPaket string, hargaMax int64) (sukses bool, pesan string, orderID string, modal int64) {
-	args := []string{"order", "--profile", e.userData, "--nomor", nomor}
+	args := []string{"order", "--cookies", e.cookieFile, "--nomor", nomor}
 	if produk != "" {
 		args = append(args, "--produk", produk)
 	}
@@ -155,15 +171,6 @@ func (e *Engine) IsipOrder(nomor, produk, voucher, namaAsli, operatorPaket strin
 		return false, r.Pesan + " — coba inject cookies ulang dari browser asli.", "", 0
 	}
 	return r.Sukses, r.Pesan, r.OrderID, r.Harga
-}
-
-// IsipInject simpan cookie file JSON ke profile (dipakai semua operasi HTTP).
-func (e *Engine) IsipInject(jsonFile string) (int, error) {
-	r, err := e.runIsip("inject", "--profile", e.userData, "--json-file", jsonFile)
-	if err != nil {
-		return 0, err
-	}
-	return r.Jumlah, nil
 }
 
 // IsipTimeoutSeconds: batas waktu helper dalam detik (untuk monitoring/test).

@@ -11,7 +11,7 @@ Lokasi: /opt/agenpulsa (root). Semua config via ENV — gak perlu rebuild buat g
   helper/isip_api.py      # helper HTTP isipulsa (butuh python3 + requests)
   web/                    # embedded UI (perlu ada saat build, runtime dibaca dari binary)
   data/agenpulsa.db       # SQLite (WAL)
-  profile/                # cookies isipulsa (inject via web admin)
+  data/cookies.json       # jar cookie isipulsa (inject via web admin, 0600)
 ```
 
 ## Service systemd
@@ -25,7 +25,7 @@ Lokasi: /opt/agenpulsa (root). Semua config via ENV — gak perlu rebuild buat g
 ```
 AP_PORT=8082                          # port HTTP
 AP_DB=/opt/agenpulsa/data/agenpulsa.db
-AP_PROFILE=/opt/agenpulsa/profile
+AP_COOKIES=/opt/agenpulsa/data/cookies.json
 PAYPAN_BASE_URL=                      # kosong = pakai settings dari web admin
 PAYPAN_TOKEN=                         # (web admin menang kalau env kosong)
 PAYPAN_WEBHOOK_SECRET=

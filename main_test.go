@@ -237,7 +237,6 @@ func TestLoginSmoke(t *testing.T) {
 	}
 }
 
-
 func mustEngine(t *testing.T, store *db.Store) *engine.Engine {
 	t.Helper()
 	e, err := engine.New(store)
@@ -394,8 +393,8 @@ func TestExpireBatas5Menit(t *testing.T) {
 		return id
 	}
 
-	lewat := mk("exp-5m", 6)   // 6 menit -> harus expired
-	dekat := mk("exp-4m", 4)   // 4 menit -> masih pending
+	lewat := mk("exp-5m", 6) // 6 menit -> harus expired
+	dekat := mk("exp-4m", 4) // 4 menit -> masih pending
 
 	a := api.New(store, mustEngine(t, store), testWebFS())
 	a.ExpirePendingForTest()
@@ -665,7 +664,7 @@ func TestNotifPublicTanpaNomor(t *testing.T) {
 	// label yg mengandung nomor (khasus scheduler) -> harus disensor
 	o2 := &db.Order{
 		Ref: "sched-3-2026-10-22T07:00", Nomor: "087832618926",
-		Label: "LANGGANAN 087832618926 (sched-3-2026-10-22T07:00)",
+		Label:  "LANGGANAN 087832618926 (sched-3-2026-10-22T07:00)",
 		Status: "success", HargaJual: 6500,
 	}
 	msg2 := api.FormatOrderNotifPublicForTest(o2, "success", "")
@@ -694,7 +693,6 @@ func TestNotifAdminWhitelist(t *testing.T) {
 		t.Errorf("whitelist salah: %v", chats)
 	}
 }
-
 
 // TestPublicBotTokenFallback: kalau token publik kosong, pakai token bot admin
 // (satu bot untuk dua tujuan: chat pribadi admin + topik supergrup).
@@ -782,8 +780,8 @@ func TestServerInfo(t *testing.T) {
 		t.Fatalf("server-info harus 200, got %d", r.StatusCode)
 	}
 	var out struct {
-		LANURL    string `json:"lan_url"`
-		PublicURL string `json:"public_url"`
+		LANURL     string `json:"lan_url"`
+		PublicURL  string `json:"public_url"`
 		Webhook    string `json:"webhook_url"`
 		WebhookLAN string `json:"webhook_url_lan"`
 		Port       string `json:"port"`
@@ -886,7 +884,7 @@ func TestModalTidakBocorKeClient(t *testing.T) {
 	o := &db.Order{
 		Ref: "r-modal", Nomor: "081234567890", Label: "Kuota Game 1GB, 30 Hari",
 		Modal: 4550, HargaJual: 6500, Status: "success",
-		Pesan: "ORDER SUKSES. Paket: Kuota Game 1GB. 30 Hari | ID: 749037171",
+		Pesan:  "ORDER SUKSES. Paket: Kuota Game 1GB. 30 Hari | ID: 749037171",
 		Sumber: "telegram", ClientID: "tg:111",
 	}
 	if _, err := store.CreateOrder(o); err != nil {
@@ -968,8 +966,8 @@ func TestPesanOrderBersihHarga(t *testing.T) {
 	o := &db.Order{
 		Ref: "r-pesan", Nomor: "081234567890", Label: "Kuota Game 1GB, 30 Hari",
 		Modal: 4550, HargaJual: 6500, Status: "success",
-		Pesan:   "ORDER SUKSES. Paket: Kuota Game 1GB. 30 Hari | Harga: Rp 4.550 | ID: 749037171",
-		Sumber:  "telegram",
+		Pesan:    "ORDER SUKSES. Paket: Kuota Game 1GB. 30 Hari | Harga: Rp 4.550 | ID: 749037171",
+		Sumber:   "telegram",
 		ClientID: "tg:111",
 	}
 	if _, err := store.CreateOrder(o); err != nil {
@@ -1136,62 +1134,6 @@ func TestCardAPIKeyHanyaDiTabPengaturan(t *testing.T) {
 	}
 }
 
-// TestCookieExpiryDariCookieEditor: cookie dari Cookie-Editor export pakai
-// key "expirationDate" (bukan "expires" seperti CDP/Playwright). Kalau key
-// gak cocok -> cookie jadi SESSION cookie -> Chromium HAPUS pas profile
-// dibuka lagi -> "tidak ada cookie di profile" padahal inject sukses.
-//
-// Test ini Regression guard untuk parsing expirationDate -> expires.
-func TestCookieExpiryDariCookieEditor(t *testing.T) {
-	// Helper kecil: test logic parsing yang sama dgn login.go
-	parseExpiry := func(c map[string]any) float64 {
-		var exp float64
-		for _, key := range []string{"expirationDate", "expires", "expiry"} {
-			if v, ok := c[key].(float64); ok && v > 0 {
-				exp = v
-				break
-			}
-		}
-		if exp > 0 && exp < float64(time.Now().Unix()) {
-			exp = float64(time.Now().Add(30 * 24 * time.Hour).Unix())
-		}
-		if exp <= 0 {
-			exp = float64(time.Now().Add(30 * 24 * time.Hour).Unix())
-		}
-		return exp
-	}
-	now := float64(time.Now().Unix())
-
-	// 1) cookie dengan expirationDate valid -> dipakai, bukan di-default
-	c1 := map[string]any{"expirationDate": now + 86400}
-	if got := parseExpiry(c1); got <= now {
-		t.Errorf("expirationDate valid harus dipakai, dapat %v", got)
-	}
-
-	// 2) cookie session (tanpa expirationDate) -> dapet default 30 hari (bukan 0)
-	c2 := map[string]any{"name": "x"}
-	got2 := parseExpiry(c2)
-	if got2 <= now {
-		t.Errorf("session cookie harus dapet expire 30 hari, dapat %v", got2)
-	}
-	if got2 > now+31*24*3600 {
-		t.Errorf("expire session cookie kelewat jauh: %v", got2)
-	}
-
-	// 3) cookie expired (expirationDate lampau) -> di-"perpanjang", bukan 0
-	c3 := map[string]any{"expirationDate": now - 86400}
-	got3 := parseExpiry(c3)
-	if got3 <= now {
-		t.Errorf("cookie expired harus diperpanjang, dapat %v", got3)
-	}
-
-	// 4) key "expires" (format CDP) juga diterima
-	c4 := map[string]any{"expires": now + 3600}
-	if got := parseExpiry(c4); got <= now {
-		t.Errorf("key 'expires' harus diterima, dapat %v", got)
-	}
-}
-
 // TestNotifCookieExpiryInvalid: aturan notif cookie
 //  1. expired <= 7 hari -> info (1x/hari)
 //  2. invalid -> max 1x per 3 hari
@@ -1238,7 +1180,7 @@ func TestNotifCookieExpiryInvalid(t *testing.T) {
 // terdeteksi -> notif admin langsung (bukan nunggu monitor).
 func TestLooksLikeLoginProblem(t *testing.T) {
 	harus := []string{
-		"tidak ada cookie di profile",
+		"tidak ada cookie di jar",
 		"sesi login habis",
 		"ERROR: isip_api: tidak ada cookie di profile",
 		"cookie tidak valid",

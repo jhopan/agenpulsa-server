@@ -1,9 +1,5 @@
-// Package engine: buka Chromium via rod, eksekusi order isipulsa dari queue.
-// Port dari bot.py (Playwright) — selektor & flow identik:
-//   - tab: .form-tabs a (text)
-//   - nomor: input[name="nomor_hp"] + blur
-//   - paket: #nominal .row button[data-voucher=...]
-//   - submit: jQuery $.post AJAX (bukan form.submit)
+// Package engine: eksekusi order isipulsa dari queue — HTTP murni via
+// helper/isip_api.py (requests + CSRF). Tanpa Chromium/CDP.
 package engine
 
 import (
@@ -11,22 +7,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
-	"github.com/go-rod/rod/lib/launcher/flags"
-	"github.com/go-rod/rod/lib/proto"
 	"github.com/jhopan/agenpulsa-server/internal/db"
 )
-
-const baseURL = "https://isipulsa.web.id/"
 
 // Jam rekap/pembukuan isipulsa: 23:40 - 00:35 WIB, order dibatalkan.
 var maintStart = 23*60 + 40 // menit
@@ -54,12 +42,10 @@ func ParseHarga(s string) int64 {
 }
 
 type Engine struct {
-	store     *db.Store
-	browser   *rod.Browser
-	userData  string
-	mu        sync.Mutex // queue: satu eksekusi browser pada satu waktu
-	wake      chan struct{}
-	closed    bool
+	store      *db.Store
+	cookieFile string // jar cookie isipulsa (JSON export Cookie-Editor)
+	wake       chan struct{}
+	closed     bool
 	// Notifier dipanggil tiap order status final (success/failed/cancelled) —
 	// di-set oleh api (TgNotify). Nil = silent.
 	Notifier func(order db.Order, status, pesan string)
@@ -73,106 +59,25 @@ type Engine struct {
 }
 
 func New(store *db.Store) (*Engine, error) {
-	userData := os.Getenv("AP_PROFILE")
-	if userData == "" {
-		userData = "profile"
-	}
-	_ = os.MkdirAll(userData, 0o755)
-	e := &Engine{store: store, userData: userData, wake: make(chan struct{}, 1)}
-	return e, nil
-}
-
-// lowmemFlags flag chromium hemat RAM/CPU (server low-spec).
-// Pasangan [nama, nilai]; nilai kosong = flag boolean.
-var lowmemFlags = [][2]string{
-	{"disable-gpu", ""},                   // tanpa GPU render
-	{"disable-dev-shm-usage", ""},         // /dev/shm kecil di VPS
-	{"disable-extensions", ""},            // tanpa ekstensi
-	{"disable-sync", ""},                  // tanpa sync
-	{"disable-translate", ""},             // tanpa translate UI
-	{"disable-background-networking", ""}, // tanpa traffic background
-	{"disable-default-apps", ""},
-	{"disable-plugins", ""},
-	{"no-first-run", ""},
-	{"mute-audio", ""},
-	{"blink-settings", "imagesEnabled=false"}, // jangan load gambar (isipulsa cukup DOM teks)
-}
-
-func applyLowmem(l *launcher.Launcher) *launcher.Launcher {
-	for _, f := range lowmemFlags {
-		if f[1] == "" {
-			l = l.Set(flags.Flag(f[0]))
-		} else {
-			l = l.Set(flags.Flag(f[0]), f[1])
+	jar := os.Getenv("AP_COOKIES")
+	if jar == "" {
+		dbPath := os.Getenv("AP_DB")
+		if dbPath == "" {
+			dbPath = filepath.Join("data", "agenpulsa.db")
 		}
+		jar = filepath.Join(filepath.Dir(dbPath), "cookies.json")
 	}
-	return l
+	if dir := filepath.Dir(jar); dir != "." && dir != "" {
+		_ = os.MkdirAll(dir, 0o700)
+	}
+	return &Engine{store: store, cookieFile: jar, wake: make(chan struct{}, 1)}, nil
 }
 
-// browser lazy: start sekali, dipakai ulang semua order.
-func (e *Engine) getBrowser() (*rod.Browser, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.browser != nil {
-		return e.browser, nil
-	}
-	l := applyLowmem(launcher.New().
-		UserDataDir(e.userData).
-		Headless(true).
-		Set("no-sandbox"))
-	url, err := l.Launch()
-	if err != nil {
-		// Fallback: pakai chromium binary dari sistem/playwright cache.
-		if bin := findChromium(); bin != "" {
-			l2 := applyLowmem(launcher.New().
-				Bin(bin).
-				UserDataDir(e.userData).
-				Headless(true).
-				Set("no-sandbox"))
-			url, err = l2.Launch()
-		}
-		if err != nil {
-			return nil, fmt.Errorf("launch chromium: %w", err)
-		}
-	}
-	e.browser = rod.New().ControlURL(url)
-	if err := e.browser.Connect(); err != nil {
-		e.browser = nil
-		return nil, err
-	}
-	return e.browser, nil
-}
+// CookieFile: path jar cookie isipulsa (JSON export Cookie-Editor).
+func (e *Engine) CookieFile() string { return e.cookieFile }
 
-func findChromium() string {
-	patterns := []string{
-		"/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome",
-		"/root/.cache/ms-playwright/chromium_headless_shell-*/chrome-linux/headless_shell",
-		"/usr/bin/chromium",
-		"/usr/bin/chromium-browser",
-	}
-	for _, p := range patterns {
-		if matches, _ := filepath.Glob(p); len(matches) > 0 {
-			return matches[0]
-		}
-	}
-	if p, err := exec.LookPath("chromium"); err == nil {
-		return p
-	}
-	return ""
-}
-
-// ProfileDir path folder user-data-dir (cookie isipulsa).
-func (e *Engine) ProfileDir() string { return e.userData }
-
-func (e *Engine) Close() {
-	e.closed = true
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.browser != nil {
-		_ = e.browser.Close()
-		e.browser = nil
-	}
-}
+// Close menghentikan worker (tidak ada browser/proses latar yang perlu ditutup).
+func (e *Engine) Close() { e.closed = true }
 
 // Enqueue memasukkan order ke antri (status queued) dan bangunkan worker.
 func (e *Engine) Enqueue(o *db.Order) error {
@@ -334,52 +239,6 @@ func (e *Engine) runOrder(o *db.Order) (string, int64, string, bool) {
 	return pesan, modal, orderID, sukses
 }
 
-// SearchPackages cari paket di tab tertentu (untuk katalog admin). Port dari search_packages().
-func (e *Engine) SearchPackages(tab, keyword, nomor string) ([]map[string]string, error) {
-	if nomor == "" {
-		nomor = "081234567890"
-	}
-	browser, err := e.getBrowser()
-	if err != nil {
-		return nil, err
-	}
-	page, err := browser.Page(proto.TargetCreateTarget{URL: baseURL})
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = page.Close() }()
-	if err := page.WaitLoad(); err != nil {
-		return nil, err
-	}
-	t, err := page.ElementR(".form-tabs a", tab)
-	if err != nil {
-		return nil, fmt.Errorf("tab %q tidak ada", tab)
-	}
-	_ = t.Click(proto.InputMouseButtonLeft, 1)
-	in, err := page.Element(`input[name="nomor_hp"]`)
-	if err != nil {
-		return nil, err
-	}
-	_ = in.Input(nomor)
-	_ = in.Blur()
-	_, _ = page.Elements("#nominal .row button")
-	res, err := page.Eval(`(kw) => Array.from(document.querySelectorAll('#nominal .row button'))
-		.filter(b => b.innerText.toLowerCase().includes(kw.toLowerCase()))
-		.map(b => ({
-			voucher: b.getAttribute('data-voucher'),
-			operator: b.getAttribute('data-operator'),
-			nama: b.getAttribute('data-nominal'),
-			harga: b.getAttribute('data-harga'),
-			teks: b.innerText.replace(/\n/g, ' ').trim()
-		}))`, keyword)
-	if err != nil {
-		return nil, err
-	}
-	var out []map[string]string
-	_ = res.Value.Unmarshal(&out)
-	return out, nil
-}
-
 // CekStatus cek login & saldo via HTTP murni (tanpa Chromium).
 func (e *Engine) CekStatus() (bool, string) {
 	ok, saldo, err := e.IsipCekStatus()
@@ -387,58 +246,6 @@ func (e *Engine) CekStatus() (bool, string) {
 		return false, "Error"
 	}
 	return ok, saldo
-}
-
-// withBrowser buka chromium baru (profile sama), jalankan fn, tutup browser.
-// Chrome tidak pernah nyangkut pegang profile (pola launch_persistent_context
-// + close di bot.py lama).
-func (e *Engine) withBrowser(fn func(page *rod.Page) (bool, string, error)) (bool, string, error) {
-	l := applyLowmem(launcher.New().
-		UserDataDir(e.userData).
-		Headless(true).
-		Leakless(false).
-		Set("no-sandbox"))
-	url, err := l.Launch()
-	if err != nil {
-		if bin := findChromium(); bin != "" {
-			l2 := applyLowmem(launcher.New().
-				Bin(bin).
-				UserDataDir(e.userData).
-				Headless(true).
-				Leakless(false).
-				Set("no-sandbox"))
-			url, err = l2.Launch()
-		}
-		if err != nil {
-			return false, "", fmt.Errorf("launch chromium: %w", err)
-		}
-	}
-	b := rod.New().ControlURL(url)
-	if err := b.Connect(); err != nil {
-		return false, "", err
-	}
-	defer b.Close()
-	page, err := b.Page(proto.TargetCreateTarget{URL: baseURL})
-	if err != nil {
-		return false, "", err
-	}
-	defer func() { _ = page.Close() }()
-	if err := page.WaitLoad(); err != nil {
-		return false, "", err
-	}
-	return fn(page)
-}
-
-func formatRp(n int64) string {
-	s := strconv.FormatInt(n, 10)
-	var b strings.Builder
-	for i, c := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
-			b.WriteByte('.')
-		}
-		b.WriteRune(c)
-	}
-	return b.String()
 }
 
 // LooksLikeLoginProblemForTest: export untuk test.

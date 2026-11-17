@@ -128,7 +128,7 @@ Syarat: bot sudah di-add ke supergrup dan dijadikan **admin**.
 | Bagian | Perilaku |
 |---|---|
 | `data/` (SQLite) | **tidak disentuh** |
-| `profile/` (cookies isipulsa) | **tidak disentuh** |
+| `cookies.json` (jar cookie isipulsa) | **tidak disentuh** |
 | `.env` (port, path DB) | **dipertahankan** |
 | systemd service | **dipertahankan** |
 | `web/`, `helper/`, binary | ditimpa (bagian rilis) |
@@ -197,7 +197,7 @@ Env (infra saja):
 |---|---|---|
 | `AP_PORT` | `8081` | port HTTP (produksi sekarang: `8800`) |
 | `AP_DB` | `data/agenpulsa.db` | path SQLite |
-| `AP_PROFILE` | `profile` | user-data-dir Chromium (cookies isipulsa) |
+| `AP_COOKIES` | `<dir AP_DB>/cookies.json` | jar cookie isipulsa (JSON export Cookie-Editor) |
 
 > Config runtime (PayPan, bot Telegram, ambang saldo, channel publik) **diatur di web admin**, bukan env — bisa diubah tanpa restart.
 
@@ -209,7 +209,7 @@ Env (infra saja):
 2. **Pengaturan → Integrasi**: URL server publik, PayPan base URL + token + secret
 3. **Pengaturan → Bot & Notifikasi**: bot token, whitelist chat ID admin
 4. **Pengaturan → Channel Publik (Testimoni)**: chat ID supergrup + topik, token publik (kosong = pakai bot admin)
-5. **Akun Login**: inject cookies isipulsa (export dari Cookie-Editor)
+5. **Akun Login**: inject cookies isipulsa (export dari Cookie-Editor). Tanpa browser: JSON disimpan sebagai `cookies.json` (0600) dan langsung dipakai helper HTTP. Cookie session (tanpa `expirationDate`) tetap disimpan (diberi masa berlaku 30 hari), dan hasil inject diverifikasi ke isipulsa: pesan akhir menyebut `login AKTIF` + saldo, atau entri yang ditolak.
 6. **Katalog**: tambah paket (search dari isipulsa, provider terisi otomatis)
 7. Daftarkan webhook di admin PayPan: `https://<domain>/webhook`
 

@@ -8,7 +8,7 @@ import (
 )
 
 // setProcGroup: pid anak jadi process group sendiri supaya Timeout kill
-// seluruh subtree (python -> chromium/Playwright).
+// seluruh subtree (python + anak prosesnya).
 func setProcGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }

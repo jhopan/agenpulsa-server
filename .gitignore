@@ -1,5 +1,6 @@
 data/
 profile/
+cookies.json
 *.exe
 agenpulsa-server
 agenpulsa-server-arm64

@@ -127,8 +127,7 @@ download_release() {
 # ATURAN: saat UPDATE, config yang sudah ada TIDAK diubah:
 #   - .env (port/path)         -> dibiarkan apa adanya
 #   - service file             -> dibiarkan apa adanya
-#   - data/ (SQLite)           -> tidak pernah disentuh
-#   - profile/ (cookies)       -> tidak pernah disentuh
+#   - data/ (SQLite + jar cookie) -> tidak pernah disentuh
 #   - web/ + helper/           -> ditimpa (memang bagian rilis)
 # Yang dibuat hanya kalau BELUM ada (install baru).
 ensure_service() {
@@ -143,7 +142,7 @@ ensure_service() {
 # infra-only (sebelum server jalan) — runtime config via web admin
 AP_PORT=$PORT
 AP_DB=$DATA_DIR/agenpulsa.db
-AP_PROFILE=$DIR/profile
+AP_COOKIES=$DATA_DIR/cookies.json
 EOF
     chmod 600 "$DIR/.env"
     say ".env dibuat (port $PORT)"

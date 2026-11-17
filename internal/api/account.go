@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -16,17 +15,17 @@ import (
 )
 
 type akunStatus struct {
-	Login    bool   `json:"login"`
-	Saldo    string `json:"saldo"`
-	Nama     string `json:"nama"`
-	Masalah  string `json:"masalah,omitempty"`
-	Profile  string `json:"profile"`
-	Username string `json:"username"`
-	WinOpen  bool   `json:"window_login_open"`
+	Login      bool   `json:"login"`
+	Saldo      string `json:"saldo"`
+	Nama       string `json:"nama"`
+	Masalah    string `json:"masalah,omitempty"`
+	CookieFile string `json:"cookie_file"`
+	Username   string `json:"username"`
+	WinOpen    bool   `json:"window_login_open"`
 	// umur cookies sejak inject terakhir + flag reminder (>= 3 hari).
 	CookieUmurJam  float64 `json:"cookie_umur_jam"`
 	CookieReminder bool    `json:"cookie_reminder"`
-	// masa berlaku cookie dari DB Chromium (lebih akurat dari umur inject).
+	// masa berlaku cookie dari jar (lebih akurat dari umur inject).
 	ExpireUnix   int64  `json:"expire_unix"`
 	ExpireWIB    string `json:"expire_wib"`
 	SisaHari     int    `json:"sisa_hari"`
@@ -54,7 +53,7 @@ func (a *API) account(w http.ResponseWriter, r *http.Request) {
 	umur := a.cookieUmurJam()
 	st := akunStatus{
 		Saldo:          "-",
-		Profile:        a.eng.ProfileDir(),
+		CookieFile:     a.eng.CookieFile(),
 		Username:       a.store.GetSetting("isipulsa_username", "-"),
 		CookieUmurJam:  umur,
 		CookieReminder: umur >= cookieReminderJam,
@@ -70,23 +69,22 @@ func (a *API) account(w http.ResponseWriter, r *http.Request) {
 		st.Saldo = saldo
 	}
 	if !ok {
-		st.Masalah = "Sesi login habis atau chromium gagal dibuka. Cek log server; pakai 'Login Manual' untuk login ulang."
+		st.Masalah = "Sesi login habis atau helper isip_api gagal jalan. Cek log server, lalu inject cookies baru di kolom bawah."
 	}
 	writeJSON(w, 200, st)
 }
 
-// gantiAkun: hapus folder profile (cookie isipulsa) -> login fresh akun baru.
+// gantiAkun: hapus jar cookie isipulsa -> login fresh akun baru.
 func (a *API) gantiAkun(w http.ResponseWriter, r *http.Request) {
-	dir := a.eng.ProfileDir()
-	a.eng.ResetLoginForce()
-	if dir != "" && dir != "." && dir != "/" {
-		if err := os.RemoveAll(dir); err != nil {
-			jsonErr(w, 500, "gagal hapus profile: "+err.Error())
+	jar := a.eng.CookieFile()
+	if jar != "" {
+		if err := os.Remove(jar); err != nil && !os.IsNotExist(err) {
+			jsonErr(w, 500, "gagal hapus jar cookie: "+err.Error())
 			return
 		}
 	}
 	_ = a.store.SetSetting("isipulsa_username", "-")
-	_ = a.store.SetSetting("cookies_updated_at", "") // hapus profile = cookies hilang
+	_ = a.store.SetSetting("cookies_updated_at", "") // hapus jar = cookies hilang
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
@@ -107,8 +105,10 @@ func (a *API) importCookies(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{
 		"ok":     true,
-		"jumlah": n,
-		"pesan":  fmt.Sprintf("%d cookie diinject ke profile — cek status login.", n),
+		"jumlah": n.Jumlah,
+		"login":  n.Login,
+		"saldo":  n.Saldo,
+		"pesan":  n.Pesan,
 	})
 }
 
@@ -147,10 +147,10 @@ var settingKeys = map[string]bool{
 	"sheet_backup_token":   true, // token rahasia biar sheet cuma bisa diisi server ini
 	// Channel notifikasi PUBLIK (testimoni): token bot + chat/channel tujuan.
 	// Isi order di channel ini TANPA nomor HP (bukti transaksi, bukan data pribadi).
-	"bot_public_token":    true,
-	"bot_public_chat_id":  true,
+	"bot_public_token":     true,
+	"bot_public_chat_id":   true,
 	"bot_public_thread_id": true, // topik (message_thread_id) di supergroup forum
-	"notif_public_status": true, // status mana yang dikirim ke channel publik (default: success)
+	"notif_public_status":  true, // status mana yang dikirim ke channel publik (default: success)
 }
 
 // tambahKey: buat/upsert API key client (admin only).
@@ -235,7 +235,7 @@ func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 	for k := range settingKeys {
 		out[k] = a.store.GetSetting(k, "")
 	}
-	out["profile_dir"] = a.eng.ProfileDir()
+	out["cookie_file"] = a.eng.CookieFile()
 	writeJSON(w, 200, out)
 }
 
