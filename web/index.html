@@ -789,8 +789,14 @@ async function hapusKatalog(id){
 async function cekAkun(){
   try{
     const a=await api('/api/v1/account');
-    $('akLogin').textContent=a.login?'AKTIF':'HABIS';
-    $('akLogin').style.color=a.login?'#186a3b':'#b42318';
+    // Gagal cek (jaringan/helper) bukan berarti cookie mati -> jangan tulis HABIS.
+    if(a.cek_error){
+      $('akLogin').textContent='GAGAL CEK';
+      $('akLogin').style.color='#8a6d00';
+    } else {
+      $('akLogin').textContent=a.login?'AKTIF':'HABIS';
+      $('akLogin').style.color=a.login?'#186a3b':'#b42318';
+    }
     $('akNama').textContent=a.nama||a.username||'-';
     $('akSaldo').textContent=a.saldo;
     $('akProfile').textContent=a.cookie_file;
@@ -820,7 +826,7 @@ async function cekAkun(){
       warn.style.display='block';
     } else warn.style.display='none';
     const m=$('akMasalah');
-    if(a.login){flash('Login isipulsa AKTIF - saldo '+a.saldo)}
+    if(a.login&&!a.cek_error){flash('Login isipulsa AKTIF - saldo '+a.saldo)}
     if(a.masalah){m.textContent=a.masalah;m.style.display='block'}else m.style.display='none';
   }catch(e){flash(e.message,1)}
 }

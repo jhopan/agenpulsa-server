@@ -1184,7 +1184,6 @@ func TestLooksLikeLoginProblem(t *testing.T) {
 		"sesi login habis",
 		"ERROR: isip_api: tidak ada cookie di profile",
 		"cookie tidak valid",
-		"kena Cloudflare challenge saat order",
 		"sesi habis",
 	}
 	for _, p := range harus {
@@ -1200,6 +1199,7 @@ func TestLooksLikeLoginProblem(t *testing.T) {
 		"nomor HP tidak benar",
 		"expired — tidak dibayar dalam 5 menit", // invoice expired, BUKAN cookie
 		"invoice expired (tidak dibayar dalam 5 menit)",
+		"kena Cloudflare challenge saat order", // IP/rate-limit, bukan cookie mati
 	}
 	for _, p := range bukan {
 		if engine.LooksLikeLoginProblemForTest(p) {

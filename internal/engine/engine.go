@@ -163,8 +163,9 @@ func looksLikeLoginProblem(pesan string) bool {
 		"harus login", "gagal login", "unauthorized", "not logged in",
 		"cookie tidak valid", "sesi habis", "session expired",
 		"login expired", "cookie expired", "cookies expired",
-		"kena cloudflare",
 	}
+	// "kena cloudflare" TIDAK termasuk: itu rate-limit/IP isipulsa, bukan cookie
+	// mati. Order gagal tetap dinotif lewat notif order biasa (alasan asli).
 	for _, k := range kata {
 		if strings.Contains(p, k) {
 			return true

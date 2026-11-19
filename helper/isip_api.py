@@ -270,8 +270,12 @@ def op_cekstatus(args):
             pesan="jar cookie kosong — inject cookies di web admin -> Akun Login")
     s = new_session(cookies, args.cookies)
     r = get_retry(s, BASE)
+    if r.status_code != 200:
+        # 5xx/429 halaman error, bukan bukti sesi ditolak -> gagal cek.
+        out(False, saldo="-", error=f"HTTP {r.status_code} dari isipulsa")
     if "Just a moment" in r.text:
-        out(False, login=False, saldo="-", pesan="kena Cloudflare challenge")
+        # Cloudflare = rate-limit/IP, bukan cookie mati -> gagal cek.
+        out(False, saldo="-", error="kena Cloudflare challenge")
     if "Masuk" in r.text and "Saldo" not in r.text:
         out(True, login=False, saldo="-", pesan="sesi login habis")
     m = re.search(r'Saldo Deposit\s*</[^>]+>\s*<span class="total-kredit">([^<]+)', r.text)

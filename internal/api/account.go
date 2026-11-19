@@ -19,6 +19,7 @@ type akunStatus struct {
 	Saldo      string `json:"saldo"`
 	Nama       string `json:"nama"`
 	Masalah    string `json:"masalah,omitempty"`
+	CekError   string `json:"cek_error,omitempty"`
 	CookieFile string `json:"cookie_file"`
 	Username   string `json:"username"`
 	WinOpen    bool   `json:"window_login_open"`
@@ -63,13 +64,18 @@ func (a *API) account(w http.ResponseWriter, r *http.Request) {
 	st.ExpireWIB = extra.ExpireWIB
 	st.SisaHari = extra.SisaHari
 	st.JumlahCookie = extra.JumlahCookie
-	ok, saldo := a.eng.CekStatus()
-	st.Login = ok
+	login, saldo, _, err := a.eng.IsipCekStatusDetail()
+	st.Login = login
 	if saldo != "" && saldo != "Error" && saldo != "-" {
 		st.Saldo = saldo
 	}
-	if !ok {
-		st.Masalah = "Sesi login habis atau helper isip_api gagal jalan. Cek log server, lalu inject cookies baru di kolom bawah."
+	switch {
+	case err != nil:
+		// Gagal CEK (jaringan/helper) != sesi ditolak. Jangan tampilkan HABIS.
+		st.CekError = err.Error()
+		st.Masalah = "Gagal cek status login (jaringan/helper): " + err.Error() + " — cookie belum tentu invalid, coba lagi sebentar."
+	case !login:
+		st.Masalah = "Sesi login habis atau isipulsa menolak sesi. Inject cookies baru di kolom bawah."
 	}
 	writeJSON(w, 200, st)
 }
