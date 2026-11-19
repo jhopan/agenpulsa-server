@@ -67,12 +67,22 @@ func (a *API) saldoTick() {
 			ambang = n
 		}
 	}
-	ok, saldoStr := a.eng.CekStatus()
-	if !ok {
+	login, saldoStr, pesan, err := a.eng.IsipCekStatusDetail()
+	if err != nil {
+		// Gagal CEK (SSL reset/timeout/helper crash) bukan cookie mati.
+		// Notif "cookie tidak valid" hanya kalau isipulsa benar-benar menolak.
+		log.Printf("[SALDO] cek gagal sementara (bukan cookie): %v", err)
+		return
+	}
+	if !login {
 		// Login/cookie invalid -> KABARI SEKARANG (rate-limit 1x/3 hari di
 		// kirimCookieInvalid). Ini deteksi TERCEPAS karena monitor saldo
 		// jalan tiap 15 menit (lebih cepat dari monitor cookie 60 menit).
-		a.kirimCookieInvalid("cek saldo: login isipulsa gagal — cookie tidak valid / sesi habis")
+		alasan := "cek saldo: login isipulsa gagal — cookie tidak valid / sesi habis"
+		if pesan != "" {
+			alasan += ": " + pesan
+		}
+		a.kirimCookieInvalid(alasan)
 		return
 	}
 	saldo := parseSaldo(saldoStr)

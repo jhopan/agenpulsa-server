@@ -423,7 +423,15 @@ def main():
     s.set_defaults(fn=op_order)
 
     args = ap.parse_args()
-    args.fn(args)
+    try:
+        args.fn(args)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001 — error jaringan harus jadi JSON
+        # Jangan dump traceback: Go membacanya sebagai "helper crash" tanpa
+        # info. JSON dengan key error -> monitor tahu ini GAGAL CEK, bukan
+        # cookie invalid (lihat statusHasil di internal/engine/isip.go).
+        out(False, error=f"{type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

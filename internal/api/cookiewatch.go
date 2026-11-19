@@ -80,13 +80,24 @@ func (a *API) cookieMonitorTick() {
 
 	// --- 2. Cookie invalid / login gagal (max 1x per 3 hari) ---
 	// Selalu dicek — bahkan kalau cookie punya tanggal expired.
-	ok, _ := a.eng.CekStatus()
-	if ok {
+	login, _, pesan, err := a.eng.IsipCekStatusDetail()
+	if err != nil {
+		// Cek gagal (SSL reset/timeout/helper crash) BUKAN bukti cookie mati.
+		// Dulu kondisi ini dinotif sebagai "cookie tidak valid" -> alarm palsu
+		// tiap isipulsa blip. Cukup log; cek berikutnya yang menentukan.
+		log.Printf("[COOKIE] cek status gagal sementara (bukan cookie): %v", err)
+		return
+	}
+	if login {
 		// login normal — reset flag biar notif invalid lagi bisa terkirim
 		_ = a.store.SetSetting("cookie_invalid_notif_at", "")
 		return
 	}
-	a.kirimCookieInvalid("login isipulsa gagal — cookie tidak valid / sesi habis")
+	alasan := "login isipulsa gagal — cookie tidak valid / sesi habis"
+	if pesan != "" {
+		alasan += ": " + pesan
+	}
+	a.kirimCookieInvalid(alasan)
 }
 
 // bolehNotifInvalid: true kalau boleh kirim notif "cookie invalid".

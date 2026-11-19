@@ -37,6 +37,9 @@ type isipResult struct {
 	OrderID string `json:"order_id"`
 	Nama    string `json:"paket"`
 	Harga   int64  `json:"harga"`
+	// Error: cek GAGAL (jaringan/SSL/timeout) — bukan "cookie invalid".
+	// Helper mengisi ini saat exception, supaya monitor tidak salah lapor.
+	Error string `json:"error"`
 }
 
 // helperPath: cari isip_api.py. Dicek relatif ke CWD, ke binary, lalu naik
@@ -88,7 +91,7 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 		// helper exit 1 saat gagal, tapi stdout tetap JSON yang valid — parse itu.
 		var res isipResult
 		if len(outBytes) > 0 && json.Unmarshal(outBytes, &res) == nil {
-			log.Printf("[ISIP %v] ok=%v login=%v saldo=%q pesan=%q", args, res.OK, res.Login, res.Saldo, res.Pesan)
+			log.Printf("[ISIP %v] ok=%v login=%v saldo=%q pesan=%q error=%q", args, res.OK, res.Login, res.Saldo, res.Pesan, res.Error)
 			return &res, nil
 		}
 		// bukan JSON: traceback/kena kill — lempar error asli.
@@ -102,7 +105,7 @@ func (e *Engine) runIsip(args ...string) (*isipResult, error) {
 		log.Printf("[ISIP %v] output: %s", args, strings.TrimSpace(string(outBytes)))
 		return nil, fmt.Errorf("isip_api output bukan JSON: %s", strings.TrimSpace(string(outBytes)))
 	}
-	log.Printf("[ISIP %v] ok=%v login=%v saldo=%q pesan=%q", args, res.OK, res.Login, res.Saldo, res.Pesan)
+	log.Printf("[ISIP %v] ok=%v login=%v saldo=%q pesan=%q error=%q", args, res.OK, res.Login, res.Saldo, res.Pesan, res.Error)
 	return &res, nil
 }
 
@@ -113,12 +116,28 @@ func (e *Engine) IsipCekStatus() (bool, string, error) {
 }
 
 // IsipCekStatusDetail: seperti IsipCekStatus + alasan dari helper (mis.
-// "tidak ada cookie di profile", "kena Cloudflare challenge") supaya bisa
+// "tidak ada cookie di jar", "kena Cloudflare challenge") supaya bisa
 // ditampilkan ke admin saat inject cookies gagal login.
 func (e *Engine) IsipCekStatusDetail() (login bool, saldo, pesan string, err error) {
 	r, err := e.runIsip("cekstatus", "--cookies", e.cookieFile)
 	if err != nil {
 		return false, "Error", err.Error(), err
+	}
+	return statusHasil(r)
+}
+
+// statusHasil: klasifikasi hasil helper cekstatus.
+//
+// PENTING untuk monitor: err != nil berarti CEK GAGAL (SSL reset, timeout,
+// helper crash) — BUKAN bukti cookie mati. Login=false (err nil) baru berarti
+// isipulsa benar-benar menolak sesi. Sebelum ini keduanya disamakan, jadi blip
+// jaringan isipulsa memicu notif "cookie tidak valid" palsu.
+func statusHasil(r *isipResult) (login bool, saldo, pesan string, err error) {
+	if r == nil {
+		return false, "Error", "", fmt.Errorf("hasil helper kosong")
+	}
+	if r.Error != "" {
+		return false, "Error", r.Pesan, fmt.Errorf("helper: %s", r.Error)
 	}
 	return r.Login, r.Saldo, r.Pesan, nil
 }
